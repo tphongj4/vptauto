@@ -20,10 +20,14 @@ Yêu cầu: Windows 10/11 x64. Không cần cài Python.
    Giữ cửa sổ Flash mở, KHÔNG thu nhỏ xuống thanh tác vụ.
 7. Nhấn F8 hoặc Dừng đăng nhập để dừng tất cả các lượt tự đăng nhập.
    Cửa sổ game vẫn mở. Đóng ứng dụng quản lý cũng dừng các bộ xử lý.
-8. Ứng dụng xác nhận màn hình đã thay đổi sau khi bấm. Nếu game vẫn đứng
-   ở màn cũ, thử lại đúng nút tối đa 3 lần rồi báo lỗi. Nút Ảnh lỗi hiện
-   cạnh trạng thái khi có ảnh: chữ thập đỏ là điểm đã bấm. Ảnh chỉ lưu
-   trên máy trong ChanDoan cạnh settings.json, không tự gửi lên mạng.
+8. Bắt buộc chỉ bấm MỘT LẦN rồi chờ tối đa 180 giây để game ngắt phiên
+   ở thiết bị khác và hoàn tất thanh tiến độ. Trạng thái hiện số giây đã
+   chờ; chỉ chọn kênh khi thấy màn kênh/nhân vật, không phải đợi đủ 180 giây.
+   Các link khác vẫn chạy; F8 vẫn dừng được khi chờ. Chọn kênh và Vào game
+   mới thử lại tối đa 3 lần khi màn cũ còn hiện. Nếu hết thời gian chờ,
+   ứng dụng báo lỗi. Nút Ảnh lỗi hiện cạnh trạng thái khi có ảnh: chữ thập
+   đỏ là điểm đã bấm. Ảnh chỉ lưu trên máy trong ChanDoan cạnh settings.json,
+   không tự gửi lên mạng.
 
 DÙNG DỮ LIỆU THỬ RIÊNG
 

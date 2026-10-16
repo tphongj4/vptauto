@@ -40,7 +40,7 @@ def scene(kind, scale=1.0, offset=(0, 0), background=True, gradient=False):
         painter.setPen(QColor("#ffeb61"))
         painter.drawText(QRectF(*rect), Qt.AlignmentFlag.AlignCenter, text)
 
-    if kind in ("login", "channels"):
+    if kind in ("login", "channels", "force_loading"):
         control(rectangles("login")[0], "Bat dau")
         control(rectangles("login")[1], "Bat buoc")
     if kind == "channels":
@@ -55,5 +55,15 @@ def scene(kind, scale=1.0, offset=(0, 0), background=True, gradient=False):
         control(rectangles(kind)[3], "Vao game")
         control(rectangles(kind)[4], "Quay lai")
         control((804, 471, 128, 28), "Tao lai pass")
+    if kind == "force_loading":
+        # Server kick/progress dialog overlays the welcome screen while the
+        # original Force button remains visible, as in the user's screenshot.
+        painter.setPen(QPen(QColor("#32c4d8"), 3))
+        painter.setBrush(QColor("#155b68"))
+        painter.drawRoundedRect(QRectF(470, 350, 370, 146), 8, 8)
+        painter.setPen(QColor("white"))
+        painter.drawText(QRectF(485, 390, 340, 50), Qt.AlignmentFlag.AlignCenter, "Waiting for the old session...")
+        painter.fillRect(QRectF(525, 447, 260, 10), QColor("#eeeeee"))
+        painter.fillRect(QRectF(525, 447, 120, 10), QColor("#32b6f1"))
     painter.end()
     return image

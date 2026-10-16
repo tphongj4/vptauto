@@ -6,7 +6,9 @@ from PySide6.QtCore import QObject, QProcess, Signal
 
 from login_images import scene
 from vptauto.login_controller import LoginController
+from vptauto.login_flow import LoginError
 from vptauto.login_session import LoginSession
+from vptauto.login_timing import FORCE_LOGIN_TIMEOUT, JOB_TIMEOUT
 
 
 class Desktop:
@@ -57,14 +59,53 @@ def test_minimized_or_moving_window_pauses_without_clicking(qt_app):
     assert len(session.desktop.clicks) == 1
 
 
-def test_ignored_background_click_does_not_claim_channel_screen(qt_app):
+@pytest.mark.parametrize("waiting_screen", ["login", "force_loading", "world"])
+def test_force_waits_once_without_claiming_success_or_repeating_click(qt_app, waiting_screen):
     session = LoginSession(10, 1, 0, Desktop)
-    session.desktop.click = lambda point: True  # Windows accepts it; game ignores it.
-    from vptauto.login_flow import LoginError
-    with pytest.raises(LoginError, match="3 lần bấm nền Bắt buộc"):
-        for i in range(1, 35):session.step(i * .4)
-    assert session.pending.attempts == 3
-    assert "đang xác nhận game chuyển màn" in session.message
+    session.desktop.click = lambda point: session.desktop.clicks.append(point) or True
+    for now in (.4, .8, 1.2):
+        assert not session.step(now)
+    sent_at = session.pending.sent_at
+    session.desktop.kind = waiting_screen
+    # Old retry, stage and flow deadlines must not interrupt a session kick.
+    for elapsed in (2, 4, 7, 44, 46, 90, FORCE_LOGIN_TIMEOUT):
+        assert not session.step(sent_at + elapsed)
+    assert len(session.desktop.clicks) == 1
+    assert session.pending.attempts == 1 and session.flow.channel is None
+    assert session.flow.state == "force_wait"
+    assert "180/180 giây" in session.message
+    with pytest.raises(LoginError, match="180 giây sau khi bấm Bắt buộc"):
+        session.step(sent_at + FORCE_LOGIN_TIMEOUT + .01)
+    assert len(session.desktop.clicks) == 1
+
+
+@pytest.mark.parametrize("slot", [1, 2, 3])
+def test_long_session_kick_then_verified_channels_and_saved_character(qt_app, slot):
+    session = LoginSession(10, slot, 0, Desktop)
+    # A late initial login plus a long kick exceeds the former 180-second
+    # total deadline, leaving a fresh budget for the remaining screens.
+    for now in (40, 40.4, 40.8):
+        session.step(now)
+    sent_at = session.pending.sent_at
+    session.desktop.kind = "force_loading"
+    for elapsed in (8, 46, 90, 175):
+        assert not session.step(sent_at + elapsed)
+    assert len(session.desktop.clicks) == 1
+    session.desktop.kind = "channels"
+    # A transient destination must not clear the pending force request.
+    assert not session.step(sent_at + 175.4)
+    session.desktop.kind = "force_loading"
+    assert not session.step(sent_at + 175.8)
+    session.desktop.kind = "channels"
+    for i in range(1, 35):
+        if session.step(sent_at + 176 + i * .4):
+            break
+    else:
+        pytest.fail(session.message)
+    assert session.flow.state == "done"
+    assert session.pending is None
+    assert len(session.desktop.clicks) == (3 if slot == 1 else 4)
+    assert session.desktop.clicks[-1][0] < 550
 
 
 def test_enter_is_confirmed_only_after_character_screen_disappears(qt_app):
@@ -125,6 +166,27 @@ def test_accounts_start_concurrently_and_hung_account_does_not_stop_peer(qt_app,
     assert len(results) == 1 and results[0][0:2] == ("first", False)
     second.send(event="done", success=True, message="Đã bấm Vào game")
     assert results[-1][0:2] == ("second", True)
+    assert not control.jobs
+
+
+def test_active_long_login_survives_old_supervisor_deadline_and_stays_bounded(qt_app, monkeypatch):
+    now = [0]
+    control = controller(monkeypatch, now)
+    control.enqueue(SimpleNamespace(pid=10, poll=lambda: None), "slow", 1)
+    control.timer.stop()
+    slow = control.jobs["slow"].worker
+    for now[0] in (46, 181, 211, JOB_TIMEOUT):
+        slow.send(event="status", message="Chờ game ngắt phiên cũ")
+        control.tick()
+        assert control.has_link("slow") and not slow.killed
+    control.enqueue(SimpleNamespace(pid=11, poll=lambda: None), "peer", 2)
+    control.timer.stop()
+    now[0] += .01
+    slow.send(event="status", message="Chờ game ngắt phiên cũ")
+    control.tick()
+    assert slow.killed and not control.has_link("slow")
+    assert control.has_link("peer")
+    control.jobs["peer"].worker.send(event="done", success=True, message="Đã bấm Vào game")
     assert not control.jobs
 
 

@@ -110,7 +110,7 @@ def main():
             if actual != (0x12, 0xef, int(key) * 0x31):
                 return fail(f"Flash {key} did not enter with the saved character: {actual}")
         if "typing-5" not in cover.toPlainText():return fail("Foreground typing was lost")
-        print("::notice::Real Flash: three covered projectors entered with slots 1/2/3; pointer and foreground unchanged.", flush=True)
+        print("::notice::Real Flash: three covered projectors waited through forced-login progress without repeating Force, entered with slots 1/2/3; pointer and foreground unchanged.", flush=True)
         result[0] = 0
         app.quit()
 

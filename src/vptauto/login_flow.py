@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from random import SystemRandom
 
 from .login_vision import Observation, Point
+from .login_timing import FLOW_TIMEOUT, FORCE_LOGIN_TIMEOUT, STAGE_TIMEOUT
 from .models import clean_character_slot
 
 
@@ -34,7 +35,8 @@ class LoginFlow:
     def message(self) -> str:
         return {
             "login": "Chờ màn đăng nhập và nút Bắt buộc…",
-            "channel": "Đã gửi bấm Bắt buộc; đang xác nhận danh sách 8 kênh…",
+            "force_wait": f"Đã bấm Bắt buộc; chờ game ngắt phiên cũ và mở danh sách kênh (tối đa {FORCE_LOGIN_TIMEOUT} giây)…",
+            "channel": "Đã thấy danh sách 8 kênh; chuẩn bị chọn kênh…",
             "character": f"Đã chọn kênh {self.channel}; chờ màn nhân vật…" if self.channel else "Chờ màn chọn nhân vật…",
             "enter": f"Đã chọn nhân vật {self.slot}; chờ nút Vào game…",
             "done": f"Đã bấm Vào game · Nhân vật {self.slot}" + (f" · Kênh {self.channel}" if self.channel else ""),
@@ -44,7 +46,11 @@ class LoginFlow:
         self.last_target, self.stable = None, 0
 
     def check_timeout(self, now: float) -> None:
-        if now - self.started > 180 or now - self.changed > 45:
+        if self.state == "force_wait" and now - self.changed > FORCE_LOGIN_TIMEOUT:
+            raise LoginError(f"Đã chờ {FORCE_LOGIN_TIMEOUT} giây sau khi bấm Bắt buộc nhưng chưa thấy màn chọn kênh/nhân vật. "
+                             "Game có thể vẫn đang ngắt phiên cũ hoặc chưa nhận thao tác. "
+                             "Hãy kiểm tra game và Ảnh lỗi; ứng dụng không tự bấm lại Bắt buộc.")
+        if now - self.started > FLOW_TIMEOUT or (self.state != "force_wait" and now - self.changed > STAGE_TIMEOUT):
             raise LoginError("Đã dừng vì chờ quá lâu hoặc không nhận diện được màn hình. "
                              "Hãy kiểm tra game; bản Flash này có thể không hỗ trợ chụp ảnh nền.")
 
@@ -52,7 +58,7 @@ class LoginFlow:
         self.check_timeout(now)
         if now < self.not_before or self.state == "done":
             return None
-        if self.state == "login" and observation.kind in ("channels", "characters"):
+        if self.state in ("login", "force_wait") and observation.kind in ("channels", "characters"):
             self.state = "channel" if observation.kind == "channels" else "character"
             self.changed = now
             self.reset_stability()
@@ -91,6 +97,6 @@ class LoginFlow:
         expected = {"login": "force", "channel": "channel", "character": "character", "enter": "enter"}
         if click.name != expected.get(self.state):
             raise LoginError("Trình tự đăng nhập không hợp lệ; đã dừng.")
-        self.state = {"force": "channel", "channel": "character", "character": "enter", "enter": "done"}[click.name]
+        self.state = {"force": "force_wait", "channel": "character", "character": "enter", "enter": "done"}[click.name]
         self.changed, self.not_before = now, now + .7
         self.reset_stability()

@@ -4,14 +4,17 @@ import flash.display.GradientType;
 import flash.display.StageAlign;
 import flash.display.StageScaleMode;
 import flash.events.MouseEvent;
+import flash.events.TimerEvent;
 import flash.geom.Matrix;
 import flash.text.TextField;
 import flash.text.TextFormat;
+import flash.utils.Timer;
 
 class Main extends Sprite {
     var pane:Sprite;
     var selected:Int = 1;
     var channel:Int = 0;
+    var forceClicks:Int = 0;
 
     public static function main() {
         flash.Lib.current.addChild(new Main());
@@ -64,7 +67,43 @@ class Main extends Sprite {
     function login() {
         clear();
         control(586, 622, 146, 28, "Start", function() {});
-        control(612, 675, 96, 24, "Force", channels);
+        control(612, 675, 96, 24, "Force", forceLogin);
+    }
+
+    function forceLogin() {
+        forceClicks++;
+        if (forceClicks > 1) return;
+        // Keep the original buttons visible behind an eight-second progress
+        // dialog. A repeated Force is recorded and fails the final color check.
+        var dialog = new Sprite();
+        dialog.x = 470;
+        dialog.y = 350;
+        dialog.graphics.lineStyle(3, 0x32c4d8);
+        dialog.graphics.beginFill(0x155b68);
+        dialog.graphics.drawRoundRect(0, 0, 370, 146, 8);
+        dialog.graphics.endFill();
+        var text = new TextField();
+        text.x = 15;
+        text.y = 40;
+        text.width = 340;
+        text.defaultTextFormat = new TextFormat("Arial", 16, 0xffffff);
+        text.text = "Waiting for the old session...";
+        dialog.addChild(text);
+        pane.addChild(dialog);
+        var bar = new Sprite();
+        dialog.addChild(bar);
+        var timer = new Timer(100, 80);
+        timer.addEventListener(TimerEvent.TIMER, function(_) {
+            bar.graphics.clear();
+            bar.graphics.beginFill(0xeeeeee);
+            bar.graphics.drawRect(55, 97, 260, 10);
+            bar.graphics.endFill();
+            bar.graphics.beginFill(0x32b6f1);
+            bar.graphics.drawRect(55, 97, 260 * timer.currentCount / 80, 10);
+            bar.graphics.endFill();
+        });
+        timer.addEventListener(TimerEvent.TIMER_COMPLETE, function(_) channels());
+        timer.start();
     }
 
     function channels() {
@@ -88,7 +127,7 @@ class Main extends Sprite {
         }
         control(442, 674, 102, 28, "Enter", function() {
             clear();
-            pane.graphics.beginFill(0x12ef00 + selected * 0x31);
+            pane.graphics.beginFill(forceClicks == 1 ? 0x12ef00 + selected * 0x31 : 0xff00ff);
             pane.graphics.drawRect(0, 0, 1310, 850);
             pane.graphics.endFill();
         });

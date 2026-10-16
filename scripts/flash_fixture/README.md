@@ -1,9 +1,13 @@
 # Local Flash input fixture
 
 `Main.hx` draws the login/channel/three-character layouts and handles actual
-Flash `MouseEvent.CLICK` events. It makes no network requests and uses no game
-assets, accounts or URLs. Entering replaces the scene with a solid color that
-encodes the selected slot; the native smoke test checks this color.
+Flash `MouseEvent.CLICK` events. Force keeps the original login buttons visible
+behind an animated progress dialog for eight seconds before opening channels,
+simulating the server disconnecting an existing session. Entering replaces the
+scene with a solid color that encodes the selected slot; repeated Force clicks
+produce a failure color. The native smoke test checks this color. It makes no
+network requests and uses no game assets, accounts or URLs. Unit tests also
+exercise waits up to 180 seconds using an injected clock.
 
 Rebuild `login.swf` with Haxe 4.3.6:
 

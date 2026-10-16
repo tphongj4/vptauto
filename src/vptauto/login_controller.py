@@ -12,6 +12,7 @@ from time import monotonic
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
 from .models import clean_character_slot
+from .login_timing import JOB_TIMEOUT
 from .windows_desktop import stop_requested
 
 
@@ -154,5 +155,5 @@ class LoginController(QObject):
             elif now - job.last_seen > 12:
                 self._finish(key, job, False, "Flash không trả ảnh nền hoặc bộ đăng nhập bị treo; "
                              "đã dừng riêng link này.")
-            elif now - job.started > 210:
+            elif now - job.started > JOB_TIMEOUT:
                 self._finish(key, job, False, "Đã dừng link này vì đăng nhập quá thời gian cho phép.")

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .login_flow import Click, LoginError, LoginFlow
+from .login_timing import FORCE_LOGIN_TIMEOUT, WINDOW_TIMEOUT
 from .login_vision import observe
 from .windows_desktop import WindowsDesktop
 
@@ -32,8 +33,8 @@ class LoginSession:
     def step(self, now: float) -> bool:
         if not self.bound:
             if not self.desktop.find_window():
-                if now - self.flow.started > 25:
-                    raise LoginError("Không tìm thấy cửa sổ thuộc phiên Flash vừa mở sau 25 giây. "
+                if now - self.flow.started > WINDOW_TIMEOUT:
+                    raise LoginError(f"Không tìm thấy cửa sổ thuộc phiên Flash vừa mở sau {WINDOW_TIMEOUT} giây. "
                                      "Nếu Flash dùng lại cửa sổ cũ, hãy đóng phiên đó rồi thử lại.")
                 return False
             self.bound = True
@@ -62,15 +63,19 @@ class LoginSession:
             if action.name in ("force", "channel", "enter"):
                 self.pending = Pending(action.name, now)
         if self.pending:
-            self.message = self._waiting_message()
+            self.message = self._waiting_message(now)
         elif observation.kind == "unknown":
             self.message = "Đã nhận ảnh cửa sổ Flash nhưng chưa nhận diện được màn hình game…"
         else:
             self.message = self.flow.message
         return False
 
-    def _waiting_message(self) -> str:
-        name = {"force": "Bắt buộc", "channel": f"kênh {self.flow.channel}", "enter": "Vào game"}[self.pending.name]
+    def _waiting_message(self, now: float) -> str:
+        if self.pending.name == "force":
+            elapsed = max(0, int(now - self.pending.sent_at))
+            return (f"Đã bấm Bắt buộc một lần; chờ game ngắt phiên cũ / hoàn tất thanh tiến độ "
+                    f"và mở danh sách kênh ({elapsed}/{FORCE_LOGIN_TIMEOUT} giây)…")
+        name = {"channel": f"kênh {self.flow.channel}", "enter": "Vào game"}[self.pending.name]
         return f"Đã gửi bấm {name} ({self.pending.attempts}/3); đang xác nhận game chuyển màn…"
 
     def _transition(self, observation, now: float) -> bool | None:
@@ -81,7 +86,7 @@ class LoginSession:
         if observation.kind in expected:
             pending.departed += 1
             if pending.departed < 3:
-                self.message = self._waiting_message()
+                self.message = self._waiting_message(now)
                 return False
             self.pending = None
             if pending.name == "enter":
@@ -89,10 +94,14 @@ class LoginSession:
                 return True
             return None
         pending.departed = 0
+        # Repeating Force can restart/interfere with the server's session kick.
+        # Even if the old buttons remain visible behind its progress dialog,
+        # wait for a positively recognized destination or the force deadline.
+        if pending.name == "force":
+            self.message = self._waiting_message(now)
+            return False
         point = None
-        if pending.name == "force" and observation.kind == "login":
-            point = observation.force
-        elif pending.name == "channel" and observation.kind == "channels" and self.flow.channel:
+        if pending.name == "channel" and observation.kind == "channels" and self.flow.channel:
             point = observation.channels[self.flow.channel - 1]
         elif pending.name == "enter" and observation.kind == "characters":
             point = observation.enter
@@ -101,7 +110,7 @@ class LoginSession:
             pending.point = point
             if now - pending.sent_at >= 2 and pending.stable >= 3:
                 if pending.attempts >= 3:
-                    name = {"force": "Bắt buộc", "channel": "chọn kênh", "enter": "Vào game"}[pending.name]
+                    name = {"channel": "chọn kênh", "enter": "Vào game"}[pending.name]
                     raise LoginError(f"Flash chưa chuyển màn sau 3 lần bấm nền {name}. "
                                      "Có thể game không nhận thông điệp chuột nền; đây không phải xác nhận đăng nhập thành công.")
                 if self.desktop.click(point):
@@ -111,5 +120,5 @@ class LoginSession:
                     pending.stable = 0
         else:
             pending.stable, pending.point = 0, None
-        self.message = self._waiting_message()
+        self.message = self._waiting_message(now)
         return False
