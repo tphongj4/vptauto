@@ -14,11 +14,16 @@ Yêu cầu: Windows 10/11 x64. Không cần cài Python.
    Nhân vật 1 được chọn sẵn nên bấm thẳng Vào game, không bấm lại thẻ.
    Kênh 1-8 gồm cả hàng bang hội và đấu giá như ảnh mẫu.
 6. Có thể để Flash sau cửa sổ khác và tiếp tục dùng chuột/bàn phím.
+   Flash có thể hiện lên lúc mới khởi động; sau đó chuyển sang ứng dụng khác.
    Bấm Chạy auto ở từng link để đăng nhập nhiều tài khoản đồng thời.
    Mỗi link có bộ xử lý riêng; link lỗi không chặn các link khác.
    Giữ cửa sổ Flash mở, KHÔNG thu nhỏ xuống thanh tác vụ.
 7. Nhấn F8 hoặc Dừng đăng nhập để dừng tất cả các lượt tự đăng nhập.
    Cửa sổ game vẫn mở. Đóng ứng dụng quản lý cũng dừng các bộ xử lý.
+8. Ứng dụng xác nhận màn hình đã thay đổi sau khi bấm. Nếu game vẫn đứng
+   ở màn cũ, thử lại đúng nút tối đa 3 lần rồi báo lỗi. Nút Ảnh lỗi hiện
+   cạnh trạng thái khi có ảnh: chữ thập đỏ là điểm đã bấm. Ảnh chỉ lưu
+   trên máy trong ChanDoan cạnh settings.json, không tự gửi lên mạng.
 
 DÙNG DỮ LIỆU THỬ RIÊNG
 
@@ -38,6 +43,8 @@ ba màn hình mẫu, chưa tự nhập tài khoản/mật khẩu hoặc thực h
 Nếu không nhận diện được màn hình hoặc chờ quá lâu, ứng dụng dừng và báo
 trạng thái. Nếu Flash dùng lại một cửa sổ cũ, hãy đóng cửa sổ đó rồi thử lại.
 Chạy nền yêu cầu Flash hỗ trợ ảnh cửa sổ và thông điệp chuột Windows.
+Mở VPT Auto và Flash cùng mức quyền, thông thường không cần chạy admin.
 Nếu Flash trả ảnh đen/không nhận thao tác, ứng dụng dừng link đó và báo lỗi.
-Kiểm tra Windows dùng giao diện game mô phỏng; cần thử thêm với game thật.
+Kiểm tra Windows dùng cửa sổ mô phỏng và Flash Projector 32 thật với
+phim SWF kiểm thử. Vẫn cần thử trên game Vua Pháp Thuật bằng Flash 25.
 Xem README.md và kết quả GitHub Actions đi kèm phiên bản.
