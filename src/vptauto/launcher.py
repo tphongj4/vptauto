@@ -22,16 +22,12 @@ def open_game(player_path: str, url: str) -> subprocess.Popen:
     if sys.platform != "win32":
         raise LaunchError("Mở Flash Player cần chạy ứng dụng này trên Windows.")
     try:
-        startup = subprocess.STARTUPINFO()
-        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        startup.wShowWindow = 4  # SW_SHOWNOACTIVATE: opening another account need not take focus.
         return subprocess.Popen(
             [str(player.resolve()), url],
             cwd=str(player.resolve().parent),
             shell=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            startupinfo=startup,
         )
     except OSError as error:
         raise LaunchError("Không khởi động được Flash Player. Hãy kiểm tra tệp đã chọn.") from error

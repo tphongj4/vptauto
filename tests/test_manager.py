@@ -68,15 +68,11 @@ def test_launcher_passes_url_as_one_argument_without_shell(tmp_path, monkeypatch
     url = "https://example.com/game.swf?user=abc&server=1&next=%22test%22"
     spawn = Mock()
     monkeypatch.setattr(launcher.sys, "platform", "win32")
-    startup = Mock(dwFlags=0)
-    monkeypatch.setattr(launcher.subprocess, "STARTUPINFO", Mock(return_value=startup), raising=False)
-    monkeypatch.setattr(launcher.subprocess, "STARTF_USESHOWWINDOW", 1, raising=False)
     monkeypatch.setattr(launcher.subprocess, "Popen", spawn)
     launcher.open_game(str(player), url)
     assert spawn.call_args.args == ([str(player.resolve()), url],)
     assert spawn.call_args.kwargs["shell"] is False
     assert spawn.call_args.kwargs["cwd"] == str(tmp_path)
-    assert spawn.call_args.kwargs["startupinfo"].wShowWindow == 4
 
 
 def test_missing_flash_never_spawns_process(tmp_path, monkeypatch):

@@ -125,11 +125,8 @@ def main():
             if hashlib.sha256(player_path.read_bytes()).hexdigest() != TEST_SHA256:raise RuntimeError("Cached test projector checksum mismatch")
         print("::notice::Native Flash: test runtime ready", flush=True)
         for slot in (1, 2, 3):
-            startup = subprocess.STARTUPINFO()
-            startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startup.wShowWindow = 4
             players[str(slot)] = subprocess.Popen([str(player_path.resolve()), str(ROOT / "scripts/flash_fixture/login.swf")],
-                                                startupinfo=startup, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print("::notice::Native Flash: three projector processes started", flush=True)
         def guarded_poll():
             try:poll()
