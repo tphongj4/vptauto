@@ -1,7 +1,7 @@
 from random import Random
 
 import pytest
-from PySide6.QtGui import QColor, QImage
+from PySide6.QtGui import QColor, QImage, QPainter
 
 from login_images import scene
 from vptauto.login_flow import LoginError, LoginFlow
@@ -40,8 +40,11 @@ def test_login_sequence_selects_saved_character_and_channel_boundaries(qt_app, s
             return channel
     flow = LoginFlow(slot, 0, Fixed())
     now = 0
-    for kind, action_name in (("login", "force"), ("channels", "channel"),
-                              ("characters", "character"), ("characters", "enter")):
+    sequence = [("login", "force"), ("channels", "channel")]
+    if slot != 1:
+        sequence.append(("characters", "character"))
+    sequence.append(("characters", "enter"))
+    for kind, action_name in sequence:
         observation = observe(scene(kind))
         click = None
         for _ in range(4):
@@ -57,6 +60,37 @@ def test_login_sequence_selects_saved_character_and_channel_boundaries(qt_app, s
         flow.performed(click, now)
     assert flow.state == "done"
     assert flow.slot == slot and flow.channel == channel
+
+
+def test_default_character_enters_without_clicking_any_card(qt_app):
+    from vptauto.login_vision import Observation
+    flow = LoginFlow(1, 0)
+    frame = Observation("characters", enter=(490, 690))
+    assert flow.next_click(frame, .4) is None
+    assert flow.next_click(frame, .8) is None
+    click = flow.next_click(frame, 1.2)
+    assert click.name == "enter" and click.point == frame.enter
+    flow.performed(click, 1.2)
+    assert flow.state == "done"
+
+
+def test_default_card_changed_color_or_other_slots_empty_still_finds_enter(qt_app):
+    from login_images import rectangles
+    image = scene("characters")
+    painter = QPainter(image)
+    # First selected card no longer matches cyan; third slot is empty.
+    for index in (0, 2):
+        painter.fillRect(*rectangles("characters")[index], QColor("#403a51"))
+    painter.end()
+    result = observe(image)
+    assert result.kind == "characters" and result.enter is not None
+    assert result.characters == ()  # Never invent a missing card's position.
+    default = LoginFlow(1, 0)
+    other = LoginFlow(2, 0)
+    for i in range(1, 4):
+        click = default.next_click(result, i * .4)
+        assert other.next_click(result, i * .4) is None
+    assert click.name == "enter"
 
 
 def test_random_channel_is_chosen_once_even_if_click_cannot_be_sent(qt_app):

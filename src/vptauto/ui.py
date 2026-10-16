@@ -628,7 +628,7 @@ class MainWindow(QMainWindow):
         self.detail.addLayout(actions)
         self.draft_status = label("", "muted", True)
         self.detail.addWidget(self.draft_status)
-        self.login_status_label = label(self.login_messages.get(link.id, "Kênh ngẫu nhiên 1–8 · Nhân vật tính từ trái sang phải."), "muted", True)
+        self.login_status_label = label(self.login_messages.get(link.id, "Đăng nhập nền · Kênh ngẫu nhiên 1–8 · Nhân vật từ trái sang phải."), "muted", True)
         self.detail.addWidget(self.login_status_label)
         heading = QHBoxLayout()
         heading.addWidget(label("Cài đặt auto", "sectionTitle"))
@@ -669,7 +669,7 @@ class MainWindow(QMainWindow):
         notice.setObjectName("notice")
         notice_layout = QVBoxLayout(notice)
         notice_layout.setContentsMargins(13, 10, 13, 10)
-        notice_layout.addWidget(label("Đã có tự đăng nhập. Auto nhiệm vụ sẽ bổ sung sau.", wrap=True))
+        notice_layout.addWidget(label("Đăng nhập nền nhiều link. Auto nhiệm vụ sẽ bổ sung sau.", wrap=True))
         self.detail.addWidget(notice)
 
     def update_link_row(self, key: str) -> None:

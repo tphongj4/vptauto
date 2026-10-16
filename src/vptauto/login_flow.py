@@ -46,7 +46,7 @@ class LoginFlow:
     def check_timeout(self, now: float) -> None:
         if now - self.started > 180 or now - self.changed > 45:
             raise LoginError("Đã dừng vì chờ quá lâu hoặc không nhận diện được màn hình. "
-                             "Hãy kiểm tra Flash, đưa cửa sổ lên trước và thử lại.")
+                             "Hãy kiểm tra game; bản Flash này có thể không hỗ trợ chụp ảnh nền.")
 
     def next_click(self, observation: Observation, now: float) -> Click | None:
         self.check_timeout(now)
@@ -57,6 +57,11 @@ class LoginFlow:
             self.changed = now
             self.reset_stability()
         click = None
+        if self.state == "character" and self.slot == 1 and observation.kind == "characters":
+            # Slot 1 is already selected by the game. Do not toggle its card.
+            self.state = "enter"
+            self.changed = now
+            self.reset_stability()
         if self.state == "login" and observation.kind == "login" and observation.force:
             click = Click("force", observation.force)
         elif self.state == "channel" and observation.kind == "channels" and len(observation.channels) == 8:

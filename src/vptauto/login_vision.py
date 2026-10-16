@@ -140,6 +140,23 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
                          and abs(b.center[1] - enter.center[1]) < max(b.h, enter.h) * .6]
                 if backs:
                     return Observation("characters", characters=tuple(b.center for b in three), enter=enter.center)
+    # Slot 1 is the default and needs only Enter. Its selected card can change
+    # color, or other slots can be empty. Validate the remaining card(s), the
+    # separated Enter/Back pair, and the reset-password button above the right
+    # side; do not invent click positions for slots we cannot see.
+    for enter in buttons:
+        if not (height * .6 < enter.center[1] < height * .94 and 2.8 <= enter.w / enter.h <= 6.5):
+            continue
+        backs = [b for b in buttons if .45 <= b.w / enter.w <= .9
+                 and abs(b.center[1] - enter.center[1]) < enter.h * .6
+                 and 2.5 <= (b.center[0] - enter.center[0]) / enter.w <= 5]
+        for back in backs:
+            above = [b for b in cards if .8 <= (enter.center[1] - b.center[1]) / b.h <= 2.8
+                     and enter.center[0] - b.w < b.center[0] < back.center[0] + b.w * .5]
+            resets = [b for b in buttons if abs(b.center[0] - back.center[0]) < enter.w
+                      and 4 <= (enter.center[1] - b.center[1]) / enter.h <= 11]
+            if above and resets:
+                return Observation("characters", enter=enter.center)
     # Start is the wider button above the smaller mandatory-login button.
     for small in buttons:
         if not width * .35 < small.center[0] < width * .65 or not height * .55 < small.center[1] < height * .94:

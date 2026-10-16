@@ -1,22 +1,26 @@
 from __future__ import annotations
 
+import json
+import os
 import sys
-from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from time import monotonic
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QProcess, QTimer, Signal
 
-from .login_flow import LoginError, LoginFlow
-from .login_vision import observe
-from .windows_desktop import WindowsDesktop
+from .models import clean_character_slot
+from .windows_desktop import stop_requested
 
 
 @dataclass
-class Request:
-    process: object
-    link_id: str
-    slot: int
+class Job:
+    target: object
+    worker: QProcess
+    last_seen: float
+    started: float
+    buffer: bytearray = field(default_factory=bytearray)
+    last_message: str = ""
 
 
 class LoginController(QObject):
@@ -24,117 +28,118 @@ class LoginController(QObject):
     finished = Signal(str, bool, str)
     busy_changed = Signal(bool)
 
-    def __init__(self, parent=None, desktop_factory=WindowsDesktop):
+    def __init__(self, parent=None, process_factory=QProcess, stop_checker=stop_requested):
         super().__init__(parent)
         self.enabled = sys.platform == "win32"
-        self.desktop_factory = desktop_factory
-        self.queue = deque()
-        self.active = None
-        self.desktop = self.flow = None
-        self.bound = False
-        self.want_focus = True
-        self.last_message = None
+        self.process_factory, self.stop_checker = process_factory, stop_checker
+        self.jobs: dict[str, Job] = {}
         self.timer = QTimer(self)
         self.timer.setInterval(400)
         self.timer.timeout.connect(self.tick)
 
     def has_link(self, key: str) -> bool:
-        return bool(self.active and self.active.link_id == key) or any(item.link_id == key for item in self.queue)
+        return key in self.jobs
 
     def enqueue(self, process, key: str, slot: int) -> None:
-        self.queue.append(Request(process, key, slot))
-        self.status.emit(key, "Đang chờ lượt tự đăng nhập…")
-        self.want_focus = True
+        slot = clean_character_slot(slot)
+        if self.has_link(key):
+            return
+        worker = self.process_factory(self)
+        now = monotonic()
+        job = Job(process, worker, now, now)
+        self.jobs[key] = job
+        worker.readyReadStandardOutput.connect(lambda: self._read(key, job))
+        worker.finished.connect(lambda code, status: self._exited(key, job))
+        worker.errorOccurred.connect(lambda error: self._error(key, job, error))
+        executable = Path(sys.executable)
+        if sys.platform == "win32":
+            executable = executable.with_name("python.exe")
+        worker.setProgram(str(executable))
+        worker.setArguments(["-u", str(Path(__file__).with_name("login_worker.py")),
+                             "--parent-pid", str(os.getpid()),
+                             "--pid", str(process.pid), "--slot", str(slot)])
+        self._message(key, job, "Đang tự đăng nhập nền · các link chạy độc lập…")
         self.busy_changed.emit(True)
-        if self.active is None:
-            self._start_next()
         self.timer.start()
+        worker.start()
 
-    def _start_next(self) -> None:
-        self.active = None
-        if not self.queue:
+    def _message(self, key: str, job: Job, message: str) -> None:
+        if message != job.last_message:
+            job.last_message = message
+            self.status.emit(key, message)
+
+    def _read(self, key: str, job: Job) -> None:
+        if self.jobs.get(key) is not job:
+            return
+        job.buffer.extend(bytes(job.worker.readAllStandardOutput()))
+        if len(job.buffer) > 65536:
+            self._finish(key, job, False, "Dữ liệu từ bộ đăng nhập nền không hợp lệ.")
+            return
+        while b"\n" in job.buffer and self.jobs.get(key) is job:
+            line, _, remaining = job.buffer.partition(b"\n")
+            job.buffer = bytearray(remaining)
+            try:
+                event = json.loads(line)
+                if not isinstance(event, dict) or event.get("event") not in ("status", "done"):
+                    raise ValueError("Unknown worker event")
+                message = event["message"]
+                if not isinstance(message, str) or len(message) > 4096:
+                    raise ValueError("Invalid worker message")
+                job.last_seen = monotonic()
+                if event["event"] == "done":
+                    if type(event.get("success")) is not bool:
+                        raise ValueError("Invalid result")
+                    self._finish(key, job, event["success"], message)
+                else:
+                    self._message(key, job, message)
+            except (ValueError, KeyError, UnicodeError):
+                self._finish(key, job, False, "Dữ liệu từ bộ đăng nhập nền không hợp lệ.")
+
+    def _finish(self, key: str, job: Job, success: bool, message: str) -> None:
+        if self.jobs.get(key) is not job:
+            return
+        del self.jobs[key]
+        # Only terminate our helper. A hung PrintWindow cannot freeze the UI or
+        # other accounts, and stopping automation never kills the Flash player.
+        if job.worker.state() != QProcess.ProcessState.NotRunning:
+            job.worker.kill()
+        else:
+            job.worker.deleteLater()
+        self._message(key, job, message)
+        self.finished.emit(key, success, message)
+        if not self.jobs:
             self.timer.stop()
             self.busy_changed.emit(False)
-            return
-        self.active = self.queue.popleft()
-        self.flow = LoginFlow(self.active.slot, monotonic())
-        self.desktop = None
-        self.bound, self.want_focus, self.last_message = False, True, None
 
-    def _message(self, text: str) -> None:
-        if self.active and text != self.last_message:
-            self.last_message = text
-            self.status.emit(self.active.link_id, text)
+    def _exited(self, key: str, job: Job) -> None:
+        self._read(key, job)
+        if self.jobs.get(key) is job:
+            self._finish(key, job, False, "Bộ đăng nhập nền đã thoát trước khi hoàn tất.")
+        job.worker.deleteLater()
 
-    def _finish(self, success: bool, message: str) -> None:
-        key = self.active.link_id
-        self._message(message)
-        self.active = None
-        self.finished.emit(key, success, message)
-        self._start_next()
+    def _error(self, key: str, job: Job, error) -> None:
+        if error == QProcess.ProcessError.FailedToStart:
+            self._finish(key, job, False, "Không khởi động được bộ đăng nhập nền. Hãy giải nén đầy đủ ứng dụng.")
 
     def cancel_all(self, reason: str = "Đã dừng tự đăng nhập (F8).") -> None:
-        requests = ([self.active] if self.active else []) + list(self.queue)
-        self.active = None
-        self.queue.clear()
-        self.timer.stop()
-        for item in requests:
-            self.status.emit(item.link_id, reason)
-            self.finished.emit(item.link_id, False, reason)
-        self.busy_changed.emit(False)
+        for key, job in list(self.jobs.items()):
+            self._finish(key, job, False, reason)
 
     def cancel_link(self, key: str) -> None:
-        removed = [item for item in self.queue if item.link_id == key]
-        self.queue = deque(item for item in self.queue if item.link_id != key)
-        for item in removed:
-            self.finished.emit(item.link_id, False, "Đã xóa link khỏi hàng chờ đăng nhập.")
-        if self.active and self.active.link_id == key:
-            self._finish(False, "Đã xóa link; dừng tự đăng nhập.")
-        elif self.active is None and not self.queue:
-            self.timer.stop()
-            self.busy_changed.emit(False)
+        if key in self.jobs:
+            self._finish(key, self.jobs[key], False, "Đã xóa link; dừng tự đăng nhập.")
 
     def tick(self) -> None:
-        if self.active is None:
+        if self.jobs and self.stop_checker():
+            self.cancel_all()
             return
-        try:
-            now = monotonic()
-            if self.desktop is None:
-                self.desktop = self.desktop_factory(self.active.process.pid)
-            if self.desktop.stop_requested():
-                self.cancel_all()
-                return
-            if not self.bound:
-                if not self.desktop.find_window():
-                    if self.active.process.poll() is not None:
-                        raise LoginError("Không tìm thấy cửa sổ thuộc phiên Flash vừa mở. "
-                                         "Flash có thể đang dùng lại cửa sổ cũ; hãy đóng phiên đó rồi thử lại.")
-                    if now - self.flow.started > 25:
-                        raise LoginError("Không tìm thấy cửa sổ Flash sau 25 giây; đã dừng tự đăng nhập.")
-                    self._message("Chờ cửa sổ Flash vừa mở…")
-                    return
-                self.bound = True
-                self.flow.started = self.flow.changed = now
-            if not self.desktop.exists():
-                raise LoginError("Cửa sổ Flash đã đóng; đã dừng tự đăng nhập.")
-            if self.want_focus:
-                self.desktop.focus()
-                self.want_focus = False
-            self.flow.check_timeout(now)
-            if not self.desktop.foreground():
-                self.flow.reset_stability()
-                self._message("Tạm dừng: đưa cửa sổ Flash lên trước để tiếp tục (F8 để dừng).")
-                return
-            observation = observe(self.desktop.capture())
-            action = self.flow.next_click(observation, now)
-            if action:
-                if not self.desktop.click(action.point):
-                    self.flow.reset_stability()
-                    self._message("Tạm dừng: nút bị che hoặc cửa sổ vừa thay đổi vị trí.")
-                    return
-                self.flow.performed(action, now)
-            self._message(self.flow.message)
-            if self.flow.state == "done":
-                self._finish(True, self.flow.message)
-        except Exception as error:
-            self._finish(False, f"Đã dừng đăng nhập: {error}")
+        now = monotonic()
+        for key, job in list(self.jobs.items()):
+            if job.target.poll() is not None:
+                self._finish(key, job, False, "Phiên Flash vừa mở đã thoát. Nếu Flash dùng lại cửa sổ cũ, "
+                             "hãy đóng phiên đó rồi thử lại.")
+            elif now - job.last_seen > 12:
+                self._finish(key, job, False, "Flash không trả ảnh nền hoặc bộ đăng nhập bị treo; "
+                             "đã dừng riêng link này.")
+            elif now - job.started > 210:
+                self._finish(key, job, False, "Đã dừng link này vì đăng nhập quá thời gian cho phép.")

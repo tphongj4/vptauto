@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vptauto"
-version = "0.3.0"
+version = "0.4.0"
 description = "Trình quản lý link và cấu hình nhiệm vụ Vua Pháp Thuật trên Windows"
 requires-python = ">=3.11"
 dependencies = ["PySide6-Essentials==6.8.3"]

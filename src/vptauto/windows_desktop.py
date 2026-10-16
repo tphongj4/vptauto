@@ -1,4 +1,8 @@
-"""Windows-only capture/input adapter, limited to the player process we launched."""
+"""Capture and message one Flash window without using the user's input devices.
+
+PrintWindow can block inside the target application. This adapter therefore
+runs in a disposable per-account worker process supervised by the manager.
+"""
 from __future__ import annotations
 
 import ctypes as c
@@ -21,17 +25,12 @@ class BitmapInfo(c.Structure):
     _fields_ = [("header", BitmapHeader), ("color", c.c_uint32)]
 
 
-class MouseInput(c.Structure):
-    _fields_ = [("dx", c.c_int32), ("dy", c.c_int32), ("data", c.c_uint32),
-                ("flags", c.c_uint32), ("time", c.c_uint32), ("extra", c.c_size_t)]
-
-
-class InputUnion(c.Union):
-    _fields_ = [("mouse", MouseInput)]
-
-
-class Input(c.Structure):
-    _fields_ = [("kind", c.c_uint32), ("value", InputUnion)]
+def stop_requested() -> bool:
+    if sys.platform != "win32":
+        return False
+    user = c.WinDLL("user32", use_last_error=True)
+    user.GetAsyncKeyState.argtypes, user.GetAsyncKeyState.restype = [c.c_int], c.c_int16
+    return bool(user.GetAsyncKeyState(0x77) & 0x8001)  # F8; no keyboard hook or grab.
 
 
 class WindowsDesktop:
@@ -45,21 +44,19 @@ class WindowsDesktop:
         self.gdi = c.WinDLL("gdi32", use_last_error=True)
         self.callback_type = c.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
         signatures = [
+            (self.user, "SetProcessDpiAwarenessContext", [c.c_void_p], w.BOOL),
             (self.user, "EnumWindows", [self.callback_type, w.LPARAM], w.BOOL),
             (self.user, "GetWindowThreadProcessId", [w.HWND, c.POINTER(w.DWORD)], w.DWORD),
             (self.user, "GetClientRect", [w.HWND, c.POINTER(w.RECT)], w.BOOL),
             (self.user, "ClientToScreen", [w.HWND, c.POINTER(w.POINT)], w.BOOL),
+            (self.user, "ScreenToClient", [w.HWND, c.POINTER(w.POINT)], w.BOOL),
             (self.user, "IsWindow", [w.HWND], w.BOOL),
             (self.user, "IsWindowVisible", [w.HWND], w.BOOL),
             (self.user, "IsIconic", [w.HWND], w.BOOL),
-            (self.user, "ShowWindow", [w.HWND, c.c_int], w.BOOL),
-            (self.user, "SetForegroundWindow", [w.HWND], w.BOOL),
-            (self.user, "GetForegroundWindow", [], w.HWND),
-            (self.user, "WindowFromPoint", [w.POINT], w.HWND),
-            (self.user, "GetAncestor", [w.HWND, w.UINT], w.HWND),
-            (self.user, "GetAsyncKeyState", [c.c_int], c.c_int16),
-            (self.user, "SetCursorPos", [c.c_int, c.c_int], w.BOOL),
-            (self.user, "SendInput", [w.UINT, c.POINTER(Input), c.c_int], w.UINT),
+            (self.user, "ChildWindowFromPointEx", [w.HWND, w.POINT, w.UINT], w.HWND),
+            (self.user, "PrintWindow", [w.HWND, w.HDC, w.UINT], w.BOOL),
+            (self.user, "SendMessageTimeoutW", [w.HWND, w.UINT, w.WPARAM, w.LPARAM,
+                                               w.UINT, w.UINT, c.POINTER(c.c_size_t)], c.c_ssize_t),
             (self.user, "GetDC", [w.HWND], w.HDC),
             (self.user, "ReleaseDC", [w.HWND, w.HDC], c.c_int),
             (self.gdi, "CreateCompatibleDC", [w.HDC], w.HDC),
@@ -68,21 +65,27 @@ class WindowsDesktop:
             (self.gdi, "SelectObject", [w.HDC, w.HANDLE], w.HANDLE),
             (self.gdi, "DeleteObject", [w.HANDLE], w.BOOL),
             (self.gdi, "DeleteDC", [w.HDC], w.BOOL),
-            (self.gdi, "BitBlt", [w.HDC, c.c_int, c.c_int, c.c_int, c.c_int,
-                                 w.HDC, c.c_int, c.c_int, w.DWORD], w.BOOL),
         ]
         for library, name, args, result in signatures:
             function = getattr(library, name)
             function.argtypes, function.restype = args, result
+        # The worker has no QApplication to establish DPI awareness.
+        self.user.SetProcessDpiAwarenessContext(c.c_void_p(-4))
+
+    def owns(self, hwnd) -> bool:
+        if not hwnd or not self.user.IsWindow(hwnd):
+            return False
+        pid = w.DWORD()
+        self.user.GetWindowThreadProcessId(hwnd, c.byref(pid))
+        return pid.value == self.pid
 
     def find_window(self) -> bool:
         candidates = []
 
         @self.callback_type
         def visit(hwnd, _parameter):
-            pid, rect = w.DWORD(), w.RECT()
-            self.user.GetWindowThreadProcessId(hwnd, c.byref(pid))
-            if pid.value == self.pid and self.user.IsWindowVisible(hwnd) and self.user.GetClientRect(hwnd, c.byref(rect)):
+            rect = w.RECT()
+            if self.owns(hwnd) and self.user.IsWindowVisible(hwnd) and self.user.GetClientRect(hwnd, c.byref(rect)):
                 width, height = rect.right - rect.left, rect.bottom - rect.top
                 if width >= 320 and height >= 240:
                     candidates.append((width * height, hwnd))
@@ -94,25 +97,10 @@ class WindowsDesktop:
         return self.hwnd is not None
 
     def exists(self) -> bool:
-        if not self.hwnd or not self.user.IsWindow(self.hwnd):
-            return False
-        pid = w.DWORD()
-        self.user.GetWindowThreadProcessId(self.hwnd, c.byref(pid))
-        return pid.value == self.pid
+        return self.owns(self.hwnd)
 
-    def foreground(self) -> bool:
-        return self.exists() and not self.user.IsIconic(self.hwnd) and self.user.GetForegroundWindow() == self.hwnd
-
-    def focus(self) -> bool:
-        if not self.exists():
-            return False
-        if self.user.IsIconic(self.hwnd):
-            self.user.ShowWindow(self.hwnd, 9)  # SW_RESTORE
-        self.user.SetForegroundWindow(self.hwnd)
-        return self.foreground()
-
-    def stop_requested(self) -> bool:
-        return bool(self.user.GetAsyncKeyState(0x77) & 0x8001)  # F8
+    def minimized(self) -> bool:
+        return bool(self.user.IsIconic(self.hwnd))
 
     def geometry(self) -> tuple[int, int, int, int]:
         if not self.exists():
@@ -123,28 +111,32 @@ class WindowsDesktop:
         return origin.x, origin.y, rect.right - rect.left, rect.bottom - rect.top
 
     def capture(self) -> QImage:
-        if not self.foreground():
-            raise LoginError("Cửa sổ Flash chưa ở phía trước.")
-        left, top, width, height = self.geometry()
+        if self.minimized():
+            raise LoginError("Hãy bỏ thu nhỏ cửa sổ Flash. Có thể để sau ứng dụng khác.")
+        geometry = self.geometry()
+        _, _, width, height = geometry
         if width <= 0 or height <= 0 or width * height > 16_000_000:
-            raise LoginError("Kích thước Flash không phù hợp. Hãy thu nhỏ cửa sổ và thử lại.")
-        screen = self.user.GetDC(None)
+            raise LoginError("Kích thước Flash không phù hợp. Hãy giảm kích thước và thử lại.")
+        source = self.user.GetDC(self.hwnd)
         memory, bitmap, old = None, None, None
-        if not screen:
-            raise LoginError("Windows không cho phép chụp màn hình Flash.")
+        if not source:
+            raise LoginError("Windows không cho phép lấy ảnh nền của Flash.")
         try:
-            memory = self.gdi.CreateCompatibleDC(screen)
+            memory = self.gdi.CreateCompatibleDC(source)
             info = BitmapInfo()
             info.header = BitmapHeader(c.sizeof(BitmapHeader), width, -height, 1, 32, 0, 0, 0, 0, 0, 0)
             bits = c.c_void_p()
-            bitmap = self.gdi.CreateDIBSection(screen, c.byref(info), 0, c.byref(bits), None, 0)
+            bitmap = self.gdi.CreateDIBSection(source, c.byref(info), 0, c.byref(bits), None, 0)
             if not memory or not bitmap or not bits.value:
                 raise LoginError("Không tạo được ảnh chụp Flash.")
             old = self.gdi.SelectObject(memory, bitmap)
-            if not self.gdi.BitBlt(memory, 0, 0, width, height, screen, left, top, 0x00CC0020 | 0x40000000):
-                raise LoginError("Không chụp được nội dung cửa sổ Flash.")
+            c.memset(bits, 0, width * height * 4)
+            # Render this window's client area even when other windows cover it.
+            # Never copy desktop pixels or activate/restore the target window.
+            if not self.user.PrintWindow(self.hwnd, memory, 3) and not self.user.PrintWindow(self.hwnd, memory, 1):
+                raise LoginError("Flash không trả ảnh nền. Hãy kiểm tra bản Flash Player đang dùng.")
             image = QImage(c.string_at(bits, width * height * 4), width, height, width * 4, QImage.Format.Format_RGB32).copy()
-            self.last_geometry = (left, top, width, height)
+            self.last_geometry = geometry
             return image
         finally:
             if old and memory:
@@ -153,23 +145,45 @@ class WindowsDesktop:
                 self.gdi.DeleteObject(bitmap)
             if memory:
                 self.gdi.DeleteDC(memory)
-            self.user.ReleaseDC(None, screen)
+            self.user.ReleaseDC(self.hwnd, source)
+
+    def _target(self, point):
+        screen = w.POINT(*point)
+        if not self.user.ClientToScreen(self.hwnd, c.byref(screen)):
+            raise LoginError("Không đọc được tọa độ Flash.")
+        target = self.hwnd
+        for _ in range(16):
+            local = w.POINT(screen.x, screen.y)
+            if not self.user.ScreenToClient(target, c.byref(local)):
+                raise LoginError("Không đọc được tọa độ cửa sổ con Flash.")
+            child = self.user.ChildWindowFromPointEx(target, local, 1 | 2 | 4)
+            if not child or child == target:
+                return target, (local.x, local.y)
+            if not self.owns(child):
+                raise LoginError("Cửa sổ nhận thao tác không thuộc phiên Flash này.")
+            target = child
+        raise LoginError("Không xác định được vùng nhận thao tác Flash.")
+
+    def _send(self, hwnd, message, flags, position) -> bool:
+        result = c.c_size_t()
+        return bool(self.user.SendMessageTimeoutW(hwnd, message, flags, position,
+                                                  0x0002 | 0x0020, 500, c.byref(result)))
 
     def click(self, point: tuple[int, int]) -> bool:
-        if not self.foreground() or self.geometry() != self.last_geometry:
+        if self.minimized() or self.geometry() != self.last_geometry:
             return False
-        left, top, width, height = self.last_geometry
+        _, _, width, height = self.last_geometry
         x, y = point
         if not 0 <= x < width or not 0 <= y < height:
             raise LoginError("Điểm bấm nằm ngoài vùng Flash; đã dừng.")
-        screen_point = w.POINT(left + x, top + y)
-        target = self.user.WindowFromPoint(screen_point)
-        if not target or self.user.GetAncestor(target, 2) != self.hwnd:
-            return False  # Another window or overlay covers this control.
-        if not self.user.SetCursorPos(screen_point.x, screen_point.y) or not self.foreground():
-            return False
-        inputs = (Input * 2)()
-        inputs[0].value.mouse.flags, inputs[1].value.mouse.flags = 0x0002, 0x0004
-        if self.user.SendInput(2, inputs, c.sizeof(Input)) != 2:
-            raise LoginError("Windows không gửi được thao tác chuột. Hãy kiểm tra quyền chạy Flash và ứng dụng.")
+        target, (x, y) = self._target(point)
+        if not 0 <= x <= 32767 or not 0 <= y <= 32767:
+            raise LoginError("Tọa độ cửa sổ con Flash không hợp lệ.")
+        position = (y << 16) | x
+        if not self._send(target, 0x0200, 0, position):  # WM_MOUSEMOVE, to HWND only.
+            raise LoginError("Cửa sổ Flash không nhận thao tác nền hoặc đang bị treo.")
+        down = self._send(target, 0x0201, 1, position)
+        up = self._send(target, 0x0202, 0, position)  # Release even when down timed out.
+        if not down or not up:
+            raise LoginError("Không gửi được thao tác nền. Flash và ứng dụng cần chạy cùng mức quyền.")
         return True

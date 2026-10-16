@@ -1,6 +1,6 @@
 # VPT Auto Manager
 
-Ứng dụng desktop tiếng Việt quản lý nhiều link Vua Pháp Thuật. Bản 0.3.0 mở Flash Player và tự thao tác **Bắt buộc → kênh ngẫu nhiên 1–8 → nhân vật đã lưu → Vào game** khi bấm **Đăng nhập** hoặc **Chạy auto**. Có thể chỉnh sửa trực tiếp link/cài đặt rồi bấm **Sửa** để lưu; chưa thực thi nhiệm vụ trong game.
+Ứng dụng desktop tiếng Việt quản lý nhiều link Vua Pháp Thuật. Bản 0.4.0 sửa đăng nhập nhân vật 1 và hỗ trợ **đăng nhập nền nhiều tài khoản đồng thời**, không di chuyển con trỏ hoặc gửi phím. Quy trình: **Bắt buộc → kênh ngẫu nhiên 1–8 → nhân vật đã lưu → Vào game**. Có thể chỉnh sửa trực tiếp link/cài đặt rồi bấm **Sửa** để lưu; chưa thực thi nhiệm vụ trong game.
 
 ## Các chức năng đã có
 
@@ -12,7 +12,8 @@
 - Bấm **Sửa** để lưu đồng thời tên, URL, vị trí nhân vật và lựa chọn nhiệm vụ của link đang chọn.
 - Giữ các thay đổi chưa lưu riêng cho từng link khi chuyển lựa chọn hoặc tìm kiếm; có nút **Hoàn tác** và nhắc trước khi đóng ứng dụng nếu chưa lưu.
 - Cả **Đăng nhập** và **Chạy auto** đều khởi động Flash Player với URL đã lưu của link đang chọn, kể cả khi chưa chọn nhiệm vụ. Cần chọn tệp Flash Player một lần trong Cài đặt.
-- Sau khi mở Flash, nhận diện các nút trên cửa sổ vừa khởi chạy để tự đăng nhập, hiển thị trạng thái riêng từng link. Các yêu cầu được xử lý lần lượt; **F8** hoặc **Dừng đăng nhập** hủy các yêu cầu đang chờ và đang chạy.
+- Nhân vật 1 là lựa chọn mặc định của game: bấm thẳng **Vào game**, không bấm lại thẻ nhân vật. Nhân vật 2/3 được chọn trước khi vào game.
+- Sau khi mở Flash, nhận diện các nút trên cửa sổ vừa khởi chạy để tự đăng nhập, hiển thị trạng thái riêng từng link. Mỗi link có tiến trình xử lý riêng, chạy đồng thời; **F8** hoặc **Dừng đăng nhập** hủy tất cả các lượt tự đăng nhập.
 - **Chạy auto** dùng cấu hình đã lưu để đăng nhập; phần thực thi nhiệm vụ sẽ bổ sung sau. Nếu mở Flash hoặc nhận diện màn hình thất bại, ứng dụng báo lỗi và dừng thao tác.
 - Dữ liệu được ghi nguyên tử; nếu ghi thất bại, giữ cấu hình cũ và báo lỗi.
 - Chỉ cho phép một phiên ứng dụng sử dụng cùng thư mục dữ liệu.
@@ -25,9 +26,9 @@ Yêu cầu: Windows 10/11 x64. Flash Player 32-bit bạn cung cấp có thể đ
 
 ### Chạy thử không cần cài đặt
 
-Tải qua GitHub: mở [Actions của kho vptauto](https://github.com/tphongj4/vptauto/actions), chọn lần chạy **Windows checks and installer** của phiên bản này có trạng thái **Success**. Trong **Artifacts** chọn **VPTAuto-Portable-0.3.0** để tải ZIP. Đăng nhập GitHub để tải artifact. Giải nén toàn bộ rồi mở `ChayThu.bat` hoặc `VPTAuto.exe` trong thư mục đã giải nén.
+Tải qua GitHub: mở [Actions của kho vptauto](https://github.com/tphongj4/vptauto/actions), chọn lần chạy **Windows checks and installer** của phiên bản này có trạng thái **Success**. Trong **Artifacts** chọn **VPTAuto-Portable-0.4.0** để tải ZIP. Đăng nhập GitHub để tải artifact. Giải nén toàn bộ rồi mở `ChayThu.bat` hoặc `VPTAuto.exe` trong thư mục đã giải nén.
 
-Nếu nhận tệp đóng gói `VPTAuto-Portable-0.3.0.zip` trực tiếp, giải nén **toàn bộ** rồi mở `VPTAuto-0.3.0/VPTAuto.exe`. Gói đã kèm Python và Qt; không cần cài riêng các thành phần này. Giữ nguyên hai thư mục `app` và `runtime` cạnh tệp `.exe`, không chạy từ bên trong ZIP.
+Nếu nhận tệp đóng gói `VPTAuto-Portable-0.4.0.zip` trực tiếp, giải nén **toàn bộ** rồi mở `VPTAuto-0.4.0/VPTAuto.exe`. Gói đã kèm Python và Qt; không cần cài riêng các thành phần này. Giữ nguyên hai thư mục `app` và `runtime` cạnh tệp `.exe`, không chạy từ bên trong ZIP.
 
 Để thử với cấu hình riêng, mở **ChayThu.bat** trong thư mục đã giải nén. Cách này lưu các link/cài đặt thử tại `DuLieuThu` cạnh chương trình. Chạy `VPTAuto.exe` trực tiếp dùng cấu hình mặc định ở LocalAppData, chung với bản cài đặt. Cả hai cách đều cần chọn Flash Player trong Cài đặt trước khi mở game.
 
@@ -35,7 +36,7 @@ Bản portable không tạo shortcut hay mục gỡ cài đặt. Có thể đón
 
 ### Dùng bộ cài
 
-1. Chạy `VPTAuto-Setup-0.3.0.exe`, cài đặt cho tài khoản Windows hiện tại. Bản này dùng được dữ liệu cấu hình cũ, mặc định nhân vật 1 nếu chưa có lựa chọn.
+1. Chạy `VPTAuto-Setup-0.4.0.exe`, cài đặt cho tài khoản Windows hiện tại. Bản này dùng được dữ liệu cấu hình cũ, mặc định nhân vật 1 nếu chưa có lựa chọn.
 2. Mở **VPT Auto Manager** từ Desktop hoặc Start Menu.
 3. Vào **Cài đặt → Chọn tệp .exe**, chọn tệp Flash Player của bạn.
 4. Vào **Liên kết game → Tạo link**, nhập tên, dán link mở game và chọn nhân vật, rồi bấm **Tạo & lưu link**.
@@ -46,13 +47,17 @@ Bản portable không tạo shortcut hay mục gỡ cài đặt. Có thể đón
 
 ### Quy trình tự đăng nhập
 
-Giữ cửa sổ Flash ở phía trước, không che các nút. Ứng dụng chờ bố cục ổn định rồi bấm **Bắt buộc**, chọn ngẫu nhiên một trong **8 hàng kênh từ trên xuống** (gồm cả bang hội và đấu giá như ảnh mẫu), chọn nhân vật theo vị trí đã lưu, rồi bấm **Vào game**. Kênh được chọn một lần cho mỗi lượt đăng nhập.
+Ứng dụng chờ bố cục ổn định rồi bấm **Bắt buộc**, chọn ngẫu nhiên một trong **8 hàng kênh từ trên xuống** (gồm cả bang hội và đấu giá như ảnh mẫu), chọn nhân vật theo vị trí đã lưu, rồi bấm **Vào game**. **Nhân vật 1 đã được game chọn sẵn nên bỏ bước bấm thẻ**, kể cả khi màu thẻ đang chọn thay đổi hoặc một số thẻ khác không hiển thị. Kênh được chọn một lần cho mỗi lượt đăng nhập.
 
-Các điểm bấm được tính từ ảnh hiện tại trong vùng nội dung Flash, có xét thay đổi kích thước/viền đen. Chỉ thao tác trên cửa sổ thuộc tiến trình Flash vừa mở. Chuyển sang cửa sổ khác làm tạm dừng; đưa Flash lên trước để tiếp tục. **F8** hoặc nút **Dừng đăng nhập** hủy toàn bộ hàng chờ, giữ nguyên cửa sổ game. Đóng ứng dụng cũng dừng tự thao tác.
+Các điểm bấm được tính từ ảnh hiện tại trong vùng nội dung Flash, có xét thay đổi kích thước/viền đen. Chỉ thao tác trên cửa sổ thuộc tiến trình Flash vừa mở. Ảnh lấy bằng Windows `PrintWindow`; thao tác được gửi bằng `SendMessageTimeoutW` tới đúng cửa sổ hoặc cửa sổ con thuộc cùng tiến trình. Không dùng `SendInput`, không đặt vị trí con trỏ, không đưa Flash lên trước, không giữ chuột/bàn phím.
+
+Bấm **Chạy auto** cho từng link để chạy nhiều tài khoản cùng lúc. Có thể để các cửa sổ Flash chồng lên nhau hoặc sau ứng dụng khác và tiếp tục làm việc. **Không thu nhỏ Flash xuống thanh tác vụ**: Flash có thể ngừng vẽ/cập nhật khi bị thu nhỏ, nên ứng dụng tạm dừng link đó. Chạy nền cần trình phát hỗ trợ ảnh cửa sổ và thông điệp chuột; nếu nhận ảnh đen hoặc game bỏ qua thao tác nền, link đó sẽ dừng vì không nhận diện được bước tiếp theo. Cần thử với bản Flash/game thực tế của bạn.
+
+Mỗi link có tiến trình phụ độc lập. Một cửa sổ không phản hồi sẽ bị dừng riêng sau 12 giây không có phản hồi từ bộ xử lý, không chặn giao diện hoặc các tài khoản khác. **F8** hoặc nút **Dừng đăng nhập** hủy các bộ xử lý, giữ nguyên cửa sổ game. Đóng ứng dụng cũng dừng tự thao tác; tiến trình phụ tự thoát nếu ứng dụng quản lý bị đóng đột ngột.
 
 Nếu không tìm thấy cửa sổ sau 25 giây, chờ một bước quá 45 giây hoặc toàn bộ quy trình quá 180 giây, ứng dụng dừng và báo trạng thái. Nếu Flash dùng lại cửa sổ cũ thuộc tiến trình khác, hãy đóng cửa sổ đó rồi chạy lại. Không nhận diện được bố cục sẽ không tạo thao tác bấm.
 
-Nhận diện dựa trên màu và vị trí tương đối của các nút trong ba màn hình mẫu đã cung cấp. Bộ kiểm tra bao gồm bố cục mô phỏng ở nhiều kích thước và chụp ảnh/gửi chuột thật trên Windows với cửa sổ mô phỏng. **Chưa kiểm thử đăng nhập trên game thật**; giao diện hoặc thời gian tải khác có thể cần điều chỉnh. Trạng thái **Đã bấm Vào game** xác nhận đã gửi thao tác, chưa xác nhận nhân vật đã tải vào thế giới game.
+Nhận diện dựa trên màu và vị trí tương đối của các nút trong ba màn hình mẫu đã cung cấp. Bộ kiểm tra Windows đăng nhập đồng thời ba cửa sổ mô phỏng ở ba tiến trình riêng, bị một cửa sổ soạn thảo che phía trên; kiểm tra giữ nguyên con trỏ, cửa sổ đang thao tác và nhập văn bản. Kiểm tra này chạy cả bằng runtime trong gói portable. **Chưa kiểm thử đăng nhập trên game thật**; giao diện hoặc thời gian tải khác có thể cần điều chỉnh. Trạng thái **Đã bấm Vào game** xác nhận đã gửi thao tác, chưa xác nhận nhân vật đã tải vào thế giới game.
 
 Flash Player và game không nằm trong bộ cài. Không cần nhập mật khẩu game vào ứng dụng này. Link được lưu trong tệp cấu hình cục bộ, kể cả tham số phiên nếu link có chứa chúng; link hết hạn cần được thay bằng link mới.
 
@@ -104,10 +109,10 @@ Trên Windows, cài NSIS 3 rồi chạy:
 
 Kết quả trong `artifacts/`:
 
-- `VPTAuto-Setup-0.3.0.exe`: bộ cài kèm môi trường chạy, shortcut và trình gỡ cài đặt.
-- `VPTAuto-Setup-0.3.0.exe.sha256`: checksum của bộ cài.
-- `VPTAuto-Portable-0.3.0.zip`: bản giải nén chạy ngay, kèm hướng dẫn và chế độ dữ liệu thử riêng.
-- `VPTAuto-Portable-0.3.0.zip.sha256`: checksum của bản portable.
+- `VPTAuto-Setup-0.4.0.exe`: bộ cài kèm môi trường chạy, shortcut và trình gỡ cài đặt.
+- `VPTAuto-Setup-0.4.0.exe.sha256`: checksum của bộ cài.
+- `VPTAuto-Portable-0.4.0.zip`: bản giải nén chạy ngay, kèm hướng dẫn và chế độ dữ liệu thử riêng.
+- `VPTAuto-Portable-0.4.0.zip.sha256`: checksum của bản portable.
 - `build-manifest.json`: thông tin thành phần và giới hạn kiểm chứng của bản đóng gói.
 
 Khi đã có bundle Windows hợp lệ tại `build/windows-stage`, chỉ cần chạy `.venv/bin/python scripts/package_portable.py` để tạo lại ZIP, không phải nén lại bộ cài. Lệnh kiểm tra mã nguồn bundle khớp mã hiện tại và CRC của các tệp ZIP trước khi xuất checksum.
@@ -122,9 +127,10 @@ Khi đã có bundle Windows hợp lệ tại `build/windows-stage`, chỉ cần 
 - `storage.py`: lưu JSON vào hồ sơ người dùng, không ghi dữ liệu cá nhân vào kho mã nguồn.
 - `launcher.py`: gọi Flash bằng danh sách đối số, không ghép lệnh qua shell.
 - `login_vision.py`: nhận diện ba bố cục từ ảnh vùng nội dung Flash.
-- `login_flow.py`, `login_controller.py`: trình tự đăng nhập, chọn kênh, hàng chờ, dừng và thời gian chờ.
-- `windows_desktop.py`: tìm đúng cửa sổ theo tiến trình, chụp ảnh và gửi chuột có kiểm tra cửa sổ đang ở phía trước.
+- `login_flow.py`, `login_session.py`: trình tự đăng nhập và trạng thái riêng cho một tài khoản.
+- `login_controller.py`, `login_worker.py`: chạy/giám sát các bộ xử lý đồng thời, dừng và thời gian chờ.
+- `windows_desktop.py`: tìm đúng cửa sổ theo tiến trình, chụp nền và gửi thông điệp chuột vào đúng cửa sổ.
 - `tests/`: kiểm tra lưu/khôi phục, lựa chọn nhân vật, lỗi ghi dữ liệu, thao tác giao diện và quy trình đăng nhập mô phỏng.
-- `scripts/smoke_login_windows.py`: kiểm tra chụp ảnh và gửi chuột Windows trên cửa sổ game mô phỏng độc lập.
+- `scripts/smoke_login_windows.py`: kiểm tra ba tài khoản nền bị che, nhân vật 1/2/3 và giữ nguyên chuột/cửa sổ làm việc trên Windows.
 
 Bộ thực thi nhiệm vụ cần bổ sung sau khi có quy trình game và ảnh/trạng thái cần nhận diện. Không coi tên nhiệm vụ trong cấu hình là mã lệnh; phần thực thi sau này phải ánh xạ ID đến bộ xử lý do ứng dụng cung cấp.

@@ -43,4 +43,5 @@ def main() -> int:
     try:
         return app.exec()
     finally:
+        window.login_controller.cancel_all("Đã đóng ứng dụng; dừng tự đăng nhập.")
         lock.unlock()

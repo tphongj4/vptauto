@@ -11,10 +11,14 @@ Yêu cầu: Windows 10/11 x64. Không cần cài Python.
    Nếu đổi link hoặc nhân vật, bấm Sửa để lưu trước khi chạy.
 5. Đăng nhập hoặc Chạy auto đều mở Flash với link và nhân vật đã lưu:
    Bắt buộc -> kênh ngẫu nhiên 1-8 -> nhân vật đã chọn -> Vào game.
+   Nhân vật 1 được chọn sẵn nên bấm thẳng Vào game, không bấm lại thẻ.
    Kênh 1-8 gồm cả hàng bang hội và đấu giá như ảnh mẫu.
-6. Giữ cửa sổ Flash ở phía trước, không che các nút. Khi chuyển cửa sổ khác,
-   thao tác tự động tạm dừng. Nhấn F8 hoặc Dừng đăng nhập trong ứng dụng để
-   hủy thao tác; cửa sổ game vẫn mở. Các link chờ được xử lý lần lượt.
+6. Có thể để Flash sau cửa sổ khác và tiếp tục dùng chuột/bàn phím.
+   Bấm Chạy auto ở từng link để đăng nhập nhiều tài khoản đồng thời.
+   Mỗi link có bộ xử lý riêng; link lỗi không chặn các link khác.
+   Giữ cửa sổ Flash mở, KHÔNG thu nhỏ xuống thanh tác vụ.
+7. Nhấn F8 hoặc Dừng đăng nhập để dừng tất cả các lượt tự đăng nhập.
+   Cửa sổ game vẫn mở. Đóng ứng dụng quản lý cũng dừng các bộ xử lý.
 
 DÙNG DỮ LIỆU THỬ RIÊNG
 
@@ -33,5 +37,7 @@ Flash Player và game không nằm trong ZIP. Tự đăng nhập nhận diện b
 ba màn hình mẫu, chưa tự nhập tài khoản/mật khẩu hoặc thực hiện nhiệm vụ.
 Nếu không nhận diện được màn hình hoặc chờ quá lâu, ứng dụng dừng và báo
 trạng thái. Nếu Flash dùng lại một cửa sổ cũ, hãy đóng cửa sổ đó rồi thử lại.
+Chạy nền yêu cầu Flash hỗ trợ ảnh cửa sổ và thông điệp chuột Windows.
+Nếu Flash trả ảnh đen/không nhận thao tác, ứng dụng dừng link đó và báo lỗi.
 Kiểm tra Windows dùng giao diện game mô phỏng; cần thử thêm với game thật.
 Xem README.md và kết quả GitHub Actions đi kèm phiên bản.
