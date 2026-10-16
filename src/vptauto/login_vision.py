@@ -32,6 +32,7 @@ class Observation:
     channels: tuple[Point, ...] = ()
     characters: tuple[Point, ...] = ()
     enter: Point | None = None
+    confirm: Point | None = None
 
 
 def cyan_boxes(image: QImage) -> list[Box]:
@@ -177,7 +178,34 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
                          + abs(small.center[1] / height - .81) - bool(panels))
                 login_pairs.append((score, small.center))
     if login_pairs:
-        return Observation("login", force=min(login_pairs)[1])
+        force = min(login_pairs)[1]
+        force_button = min(buttons, key=lambda b: abs(b.center[0] - force[0]) + abs(b.center[1] - force[1]))
+        # The supplied login notice is a compact, centered cyan frame with
+        # one confirmation button. Require the actual Start/Force pair below
+        # it; never treat an in-game OK button or a progress bar as this notice.
+        notices = set()
+        has_notice_frame = False
+        for panel in boxes:
+            if not (3 <= panel.w / force_button.w <= 5
+                    and .55 <= panel.h / force_button.w <= 1.25
+                    and abs(panel.center[0] - force[0]) < force_button.w * .3
+                    and 1.5 <= (force[1] - panel.y - panel.h) / force_button.w <= 3.5):
+                continue
+            has_notice_frame = True
+            controls = [b for b in buttons if panel.x < b.x and b.x + b.w < panel.x + panel.w
+                        and panel.y < b.y and b.y + b.h < panel.y + panel.h]
+            if len(controls) != 1:
+                continue
+            confirm = controls[0]
+            if (.6 <= confirm.w / force_button.w <= 1.1
+                    and abs(confirm.center[0] - panel.center[0]) < force_button.w * .15
+                    and .5 <= (confirm.center[1] - panel.y) / panel.h <= .9):
+                notices.add(confirm.center)
+        if len(notices) == 1:
+            return Observation("login_notice", force=force, confirm=next(iter(notices)))
+        if has_notice_frame:
+            return Observation()  # Do not click through an ambiguous modal.
+        return Observation("login", force=force)
     return Observation()
 
 

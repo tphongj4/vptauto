@@ -40,7 +40,7 @@ def scene(kind, scale=1.0, offset=(0, 0), background=True, gradient=False):
         painter.setPen(QColor("#ffeb61"))
         painter.drawText(QRectF(*rect), Qt.AlignmentFlag.AlignCenter, text)
 
-    if kind in ("login", "channels", "force_loading"):
+    if kind in ("login", "channels", "force_loading", "login_notice"):
         control(rectangles("login")[0], "Bat dau")
         control(rectangles("login")[1], "Bat buoc")
     if kind == "channels":
@@ -65,5 +65,12 @@ def scene(kind, scale=1.0, offset=(0, 0), background=True, gradient=False):
         painter.drawText(QRectF(485, 390, 340, 50), Qt.AlignmentFlag.AlignCenter, "Waiting for the old session...")
         painter.fillRect(QRectF(525, 447, 260, 10), QColor("#eeeeee"))
         painter.fillRect(QRectF(525, 447, 120, 10), QColor("#32b6f1"))
+    if kind == "login_notice":
+        painter.setPen(QPen(QColor("#32c4d8"), 3))
+        painter.setBrush(QColor("#002d2d"))
+        painter.drawRoundedRect(QRectF(480, 400, 352, 80), 8, 8)
+        painter.setPen(QColor("white"))
+        painter.drawText(QRectF(495, 409, 325, 25), Qt.AlignmentFlag.AlignCenter, "Lien ket qua han, vui long dang nhap lai sau")
+        control((618, 442, 78, 24), "Co")
     painter.end()
     return image

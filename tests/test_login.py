@@ -8,7 +8,7 @@ from vptauto.login_flow import LoginError, LoginFlow
 from vptauto.login_vision import observe
 
 
-@pytest.mark.parametrize("kind", ["login", "channels", "characters"])
+@pytest.mark.parametrize("kind", ["login", "channels", "characters", "login_notice"])
 @pytest.mark.parametrize("scale,offset", [(1, (0, 0)), (.65, (23, 17)), (1.5, (40, 35))])
 def test_visual_layout_recognition_with_scale_and_letterboxing(qt_app, kind, scale, offset):
     result = observe(scene(kind, scale, offset))
@@ -20,6 +20,10 @@ def test_visual_layout_recognition_with_scale_and_letterboxing(qt_app, kind, sca
         assert len(result.characters) == 3
         assert result.characters[0][0] < result.characters[1][0] < result.characters[2][0]
         assert result.enter[1] > result.characters[0][1]
+    elif kind == "login_notice":
+        expected = (round(657 * scale + offset[0]), round(454 * scale + offset[1]))
+        assert max(abs(a - b) for a, b in zip(result.confirm, expected)) < 5 * scale
+        assert result.force[1] > result.confirm[1]
     else:
         expected = (round(660 * scale + offset[0]), round(687 * scale + offset[1]))
         assert max(abs(a - b) for a, b in zip(result.force, expected)) < 5 * scale
@@ -31,12 +35,31 @@ def test_blank_screen_never_produces_click_targets():
     assert observe(image).kind == "unknown"
 
 
-@pytest.mark.parametrize("kind", ["login", "channels", "characters"])
+@pytest.mark.parametrize("kind", ["login", "channels", "characters", "login_notice"])
 @pytest.mark.parametrize("scale", [.65, 1, 1.5])
 def test_gradient_buttons_with_thin_cyan_strips_are_recognized(qt_app, kind, scale):
     frame = scene(kind, scale=scale, gradient=True)
     result = observe(frame)
     assert result.kind == kind
+
+
+def test_notice_requires_login_controls_and_a_single_confirmation_button(qt_app):
+    image = scene("login_notice", gradient=True)
+    painter = QPainter(image)
+    painter.fillRect(580, 615, 160, 95, QColor("black"))
+    painter.end()
+    assert observe(image).kind == "unknown"
+    image = scene("login_notice", gradient=True)
+    painter = QPainter(image)
+    painter.fillRect(510, 445, 75, 18, QColor("#00cbd7"))
+    painter.end()
+    result = observe(image)
+    assert result.kind == "unknown" and result.force is None
+
+
+def test_progress_dialog_never_becomes_confirmation_target(qt_app):
+    result = observe(scene("force_loading", gradient=True))
+    assert result.kind != "login_notice" and result.confirm is None
 
 
 def test_background_fragments_do_not_override_lower_center_login_controls(qt_app):

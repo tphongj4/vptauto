@@ -28,6 +28,11 @@ Yêu cầu: Windows 10/11 x64. Không cần cài Python.
    ứng dụng báo lỗi. Nút Ảnh lỗi hiện cạnh trạng thái khi có ảnh: chữ thập
    đỏ là điểm đã bấm. Ảnh chỉ lưu trên máy trong ChanDoan cạnh settings.json,
    không tự gửi lên mạng.
+9. Nếu có hộp thông báo đăng nhập một nút như ảnh "Liên kết quá hạn",
+   tự bấm Có/OK, đợi hộp đóng rồi mới bấm Bắt buộc lại. Xử lý tối đa 3 lượt
+   thông báo; nếu vẫn lặp thì dừng và báo kiểm tra/cập nhật link. Không bấm
+   Bắt buộc khi thanh tiến độ hoặc hộp thông báo còn mở. Thời gian toàn bộ
+   quy trình vẫn bị giới hạn; không thử lại vô tận.
 
 DÙNG DỮ LIỆU THỬ RIÊNG
 

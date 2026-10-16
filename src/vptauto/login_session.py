@@ -60,7 +60,7 @@ class LoginSession:
                 return False
             self.flow.performed(action, now)
             self.last_click = action
-            if action.name in ("force", "channel", "enter"):
+            if action.name in ("force", "channel", "enter", "dismiss"):
                 self.pending = Pending(action.name, now)
         if self.pending:
             self.message = self._waiting_message(now)
@@ -75,6 +75,9 @@ class LoginSession:
             elapsed = max(0, int(now - self.pending.sent_at))
             return (f"Đã bấm Bắt buộc một lần; chờ game ngắt phiên cũ / hoàn tất thanh tiến độ "
                     f"và mở danh sách kênh ({elapsed}/{FORCE_LOGIN_TIMEOUT} giây)…")
+        if self.pending.name == "dismiss":
+            return (f"Đã bấm Có/OK ({self.pending.attempts}/3); chờ thông báo đóng trước khi thử lại Bắt buộc "
+                    f"(lượt {self.flow.recoveries})…")
         name = {"channel": f"kênh {self.flow.channel}", "enter": "Vào game"}[self.pending.name]
         return f"Đã gửi bấm {name} ({self.pending.attempts}/3); đang xác nhận game chuyển màn…"
 
@@ -82,7 +85,12 @@ class LoginSession:
         pending = self.pending
         if pending is None:
             return None
-        expected = {"force": ("channels", "characters"), "channel": ("characters",), "enter": ("unknown",)}[pending.name]
+        if observation.kind == "login_notice" and pending.name != "dismiss":
+            pending.departed = 0
+            return None  # Let the flow confirm and dismiss the new notice.
+        self.flow.reset_stability()
+        expected = {"force": ("channels", "characters"), "channel": ("characters",),
+                    "enter": ("unknown",), "dismiss": ("login", "channels", "characters")}[pending.name]
         if observation.kind in expected:
             pending.departed += 1
             if pending.departed < 3:
@@ -105,12 +113,14 @@ class LoginSession:
             point = observation.channels[self.flow.channel - 1]
         elif pending.name == "enter" and observation.kind == "characters":
             point = observation.enter
+        elif pending.name == "dismiss" and observation.kind == "login_notice":
+            point = observation.confirm
         if point:
             pending.stable = pending.stable + 1 if pending.point and max(abs(a-b) for a,b in zip(point, pending.point)) <= 6 else 1
             pending.point = point
             if now - pending.sent_at >= 2 and pending.stable >= 3:
                 if pending.attempts >= 3:
-                    name = {"channel": "chọn kênh", "enter": "Vào game"}[pending.name]
+                    name = {"channel": "chọn kênh", "enter": "Vào game", "dismiss": "Có/OK"}[pending.name]
                     raise LoginError(f"Flash chưa chuyển màn sau 3 lần bấm nền {name}. "
                                      "Có thể game không nhận thông điệp chuột nền; đây không phải xác nhận đăng nhập thành công.")
                 if self.desktop.click(point):

@@ -48,15 +48,15 @@ jobs:
       - name: Prepare portable download
         id: portable
         shell: pwsh
-        run: Expand-Archive -Path artifacts/VPTAuto-Portable-0.4.2.zip -DestinationPath build/portable-artifact
+        run: Expand-Archive -Path artifacts/VPTAuto-Portable-0.4.3.zip -DestinationPath build/portable-artifact
       - name: Test portable app without installation
         timeout-minutes: 3
         shell: pwsh
         run: |
-          $zipPath = (Resolve-Path artifacts/VPTAuto-Portable-0.4.2.zip).Path
+          $zipPath = (Resolve-Path artifacts/VPTAuto-Portable-0.4.3.zip).Path
           $portableDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Portable Test'
           Expand-Archive -Path $zipPath -DestinationPath $portableDir
-          $appDir = Join-Path $portableDir 'VPTAuto-0.4.2'
+          $appDir = Join-Path $portableDir 'VPTAuto-0.4.3'
           $dataDir = Join-Path $portableDir 'Test Data'
           $result = Start-Process -FilePath (Join-Path $appDir 'VPTAuto.exe') -ArgumentList @('--smoke-test', '--data-dir', "`"$dataDir`"") -Wait -PassThru
           if ($result.ExitCode -ne 0) { throw 'Portable app smoke test failed' }
@@ -64,19 +64,19 @@ jobs:
         timeout-minutes: 2
         shell: pwsh
         run: |
-          & 'build/portable-artifact/VPTAuto-0.4.2/runtime/python.exe' scripts/smoke_login_windows.py --app-source 'build/portable-artifact/VPTAuto-0.4.2/app/src'
+          & 'build/portable-artifact/VPTAuto-0.4.3/runtime/python.exe' scripts/smoke_login_windows.py --app-source 'build/portable-artifact/VPTAuto-0.4.3/app/src'
           if ($LASTEXITCODE -ne 0) { throw 'Bundled background login test failed' }
       - name: Test bundled runtime with real Flash projectors
         timeout-minutes: 2
         shell: pwsh
         run: |
-          & 'build/portable-artifact/VPTAuto-0.4.2/runtime/python.exe' scripts/smoke_flash_windows.py --app-source 'build/portable-artifact/VPTAuto-0.4.2/app/src'
+          & 'build/portable-artifact/VPTAuto-0.4.3/runtime/python.exe' scripts/smoke_flash_windows.py --app-source 'build/portable-artifact/VPTAuto-0.4.3/app/src'
           if ($LASTEXITCODE -ne 0) { throw 'Bundled native Flash login test failed' }
       - name: Install, open, and uninstall packaged app
         timeout-minutes: 3
         shell: pwsh
         run: |
-          $installer = (Resolve-Path artifacts/VPTAuto-Setup-0.4.2.exe).Path
+          $installer = (Resolve-Path artifacts/VPTAuto-Setup-0.4.3.exe).Path
           $installDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Package Test'
           $dataDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Test Data'
           $result = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
@@ -97,18 +97,18 @@ jobs:
         if: ${{ always() && steps.portable.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: VPTAuto-Portable-0.4.2
-          path: build/portable-artifact/VPTAuto-0.4.2/
+          name: VPTAuto-Portable-0.4.3
+          path: build/portable-artifact/VPTAuto-0.4.3/
           if-no-files-found: error
           retention-days: 14
       - name: Upload installer download
         if: ${{ always() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: VPTAuto-Installer-0.4.2
+          name: VPTAuto-Installer-0.4.3
           if-no-files-found: error
           retention-days: 14
           path: |
-            artifacts/VPTAuto-Setup-0.4.2.exe
-            artifacts/VPTAuto-Setup-0.4.2.exe.sha256
+            artifacts/VPTAuto-Setup-0.4.3.exe
+            artifacts/VPTAuto-Setup-0.4.3.exe.sha256
             artifacts/build-manifest.json

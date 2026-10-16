@@ -15,6 +15,9 @@ class Main extends Sprite {
     var selected:Int = 1;
     var channel:Int = 0;
     var forceClicks:Int = 0;
+    var confirmations:Int = 0;
+    var blocked:Bool = false;
+    var badInput:Bool = false;
 
     public static function main() {
         flash.Lib.current.addChild(new Main());
@@ -72,9 +75,13 @@ class Main extends Sprite {
 
     function forceLogin() {
         forceClicks++;
-        if (forceClicks > 1) return;
+        if (blocked) {
+            badInput = true;
+            return;
+        }
+        blocked = true;
         // Keep the original buttons visible behind an eight-second progress
-        // dialog. A repeated Force is recorded and fails the final color check.
+        // dialog. Only a confirmed notice allows another Force attempt.
         var dialog = new Sprite();
         dialog.x = 470;
         dialog.y = 350;
@@ -102,8 +109,31 @@ class Main extends Sprite {
             bar.graphics.drawRect(55, 97, 260 * timer.currentCount / 80, 10);
             bar.graphics.endFill();
         });
-        timer.addEventListener(TimerEvent.TIMER_COMPLETE, function(_) channels());
+        timer.addEventListener(TimerEvent.TIMER_COMPLETE, function(_) {
+            if (forceClicks == 1) loginNotice();
+            else channels();
+        });
         timer.start();
+    }
+
+    function loginNotice() {
+        login();
+        pane.graphics.lineStyle(3, 0x32c4d8);
+        pane.graphics.beginFill(0x002d2d);
+        pane.graphics.drawRoundRect(480, 400, 352, 80, 8);
+        pane.graphics.endFill();
+        var text = new TextField();
+        text.x = 495;
+        text.y = 409;
+        text.width = 325;
+        text.defaultTextFormat = new TextFormat("Arial", 14, 0xffffff);
+        text.text = "Link expired, please log in again";
+        pane.addChild(text);
+        control(618, 442, 78, 24, "OK", function() {
+            confirmations++;
+            blocked = false;
+            login();
+        });
     }
 
     function channels() {
@@ -127,7 +157,8 @@ class Main extends Sprite {
         }
         control(442, 674, 102, 28, "Enter", function() {
             clear();
-            pane.graphics.beginFill(forceClicks == 1 ? 0x12ef00 + selected * 0x31 : 0xff00ff);
+            var valid = forceClicks == 2 && confirmations == 1 && !badInput;
+            pane.graphics.beginFill(valid ? 0x12ef00 + selected * 0x31 : 0xff00ff);
             pane.graphics.drawRect(0, 0, 1310, 850);
             pane.graphics.endFill();
         });

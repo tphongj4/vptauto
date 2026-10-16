@@ -8,7 +8,7 @@ from login_images import scene
 from vptauto.login_controller import LoginController
 from vptauto.login_flow import LoginError
 from vptauto.login_session import LoginSession
-from vptauto.login_timing import FORCE_LOGIN_TIMEOUT, JOB_TIMEOUT
+from vptauto.login_timing import FORCE_LOGIN_TIMEOUT, JOB_TIMEOUT, MAX_LOGIN_RECOVERIES
 
 
 class Desktop:
@@ -119,6 +119,120 @@ def test_enter_is_confirmed_only_after_character_screen_disappears(qt_app):
     assert not session.step(2.4)
     assert not session.step(2.8)
     assert session.step(3.2)
+
+
+class NoticeDesktop(Desktop):
+    def __init__(self, pid):
+        super().__init__(pid)
+        self.force_count = self.dismiss_count = 0
+        self.repeating = self.ignore_ok = self.sticky_ok = False
+
+    def click(self, point):
+        if self.kind == "login":
+            self.clicks.append(point)
+            self.force_count += 1
+            self.kind = "login_notice" if self.force_count == 1 or self.repeating else "channels"
+            return True
+        if self.kind == "login_notice":
+            assert point[1] < 500, "Must click OK, never Force behind the notice"
+            self.clicks.append(point)
+            self.dismiss_count += 1
+            if not self.ignore_ok and not self.sticky_ok:
+                self.kind = "login"
+            return True
+        return super().click(point)
+
+
+@pytest.mark.parametrize("slot", [1, 2, 3])
+def test_notice_ok_then_force_retry_enters_saved_character(qt_app, slot):
+    session = LoginSession(10, slot, 0, NoticeDesktop)
+    for i in range(1, 60):
+        if session.step(i * .4):
+            break
+    else:
+        pytest.fail(session.message)
+    assert session.flow.state == "done" and session.flow.recoveries == 1
+    assert session.desktop.force_count == 2 and session.desktop.dismiss_count == 1
+    assert session.desktop.clicks[1][1] < 500  # OK must precede the new Force.
+    assert session.desktop.clicks[2][1] > 650
+    assert len(session.desktop.clicks) == (5 if slot == 1 else 6)
+
+
+def test_visible_notice_must_close_before_any_force_retry(qt_app):
+    session = LoginSession(10, 1, 0, NoticeDesktop)
+    session.desktop.sticky_ok = True
+    for i in range(1, 20):
+        session.step(i * .4)
+        if session.pending and session.pending.name == "dismiss":
+            break
+    sent_at = session.pending.sent_at
+    for elapsed in (.4, .8, 1.2):
+        assert not session.step(sent_at + elapsed)
+    assert session.desktop.force_count == 1 and session.desktop.dismiss_count == 1
+    session.desktop.kind = "login"
+    assert not session.step(sent_at + 1.6)
+    # A single clear frame is not enough if the same dialog flickers back.
+    session.desktop.kind = "login_notice"
+    assert not session.step(sent_at + 1.8)
+    assert session.desktop.force_count == 1
+    session.desktop.kind = "login"
+    for elapsed in (2, 2.4):
+        assert not session.step(sent_at + elapsed)
+        assert session.desktop.force_count == 1
+    for elapsed in (2.8, 3.2, 3.6):
+        session.step(sent_at + elapsed)
+    assert session.desktop.force_count == 2
+
+
+def test_ignored_ok_is_bounded_and_never_retries_force(qt_app):
+    session = LoginSession(10, 1, 0, NoticeDesktop)
+    session.desktop.ignore_ok = True
+    with pytest.raises(LoginError, match="3 lần bấm nền Có/OK"):
+        for i in range(1, 60):
+            session.step(i * .4)
+    assert session.desktop.force_count == 1
+    assert session.desktop.dismiss_count == 3
+    assert session.flow.recoveries == 1
+
+
+def test_repeating_expired_notice_stops_after_bounded_recoveries(qt_app):
+    session = LoginSession(10, 1, 0, NoticeDesktop)
+    session.desktop.repeating = True
+    with pytest.raises(LoginError, match="Link có thể đã hết hạn"):
+        for i in range(1, 120):
+            session.step(i * .4)
+    assert session.flow.recoveries == MAX_LOGIN_RECOVERIES
+    assert session.desktop.dismiss_count == MAX_LOGIN_RECOVERIES
+    assert session.desktop.force_count == MAX_LOGIN_RECOVERIES + 1
+
+
+def test_transient_notice_does_not_trigger_ok_and_resets_stability(qt_app):
+    session = LoginSession(10, 1, 0, NoticeDesktop)
+    for now in (.4, .8, 1.2):
+        session.step(now)
+    session.step(2)
+    session.step(2.4)
+    session.desktop.kind = "force_loading"
+    session.step(2.8)
+    session.desktop.kind = "login_notice"
+    session.step(3.2)
+    session.step(3.6)
+    assert session.desktop.dismiss_count == 0
+    session.step(4)
+    assert session.desktop.dismiss_count == 1
+
+
+def test_notice_after_enter_is_not_mistaken_for_success(qt_app):
+    session = LoginSession(10, 1, 0, NoticeDesktop)
+    session.desktop.kind = "characters"
+    for now in (.4, .8, 1.2):
+        assert not session.step(now)
+    assert session.pending.name == "enter"
+    session.desktop.kind = "login_notice"
+    for now in (1.6, 2, 2.4, 2.8):
+        assert not session.step(now)
+    assert session.pending.name == "dismiss" and session.flow.state == "dismiss_wait"
+    assert session.desktop.dismiss_count == 1 and session.flow.channel is None
 
 
 class Worker(QObject):

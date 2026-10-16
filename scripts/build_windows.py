@@ -23,7 +23,7 @@ from package_portable import create_portable
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
 STAGE = BUILD / "windows-stage"
-VERSION = "0.4.2"
+VERSION = "0.4.3"
 PYTHON_URL = "https://api.nuget.org/v3-flatcontainer/python/3.12.10/python.3.12.10.nupkg"
 # NuGet's immutable package SHA512 (x-ms-meta-sha512, retrieved over verified TLS).
 PYTHON_SHA512 = "u9pNz2iKlCEbYtUJaKkbOPMF0LjR7NkCafdKhvigpPzrt8oWKgdTpHaR6z3wyWQAm9PYGUxv0Zr66NX9AeHMDw=="
