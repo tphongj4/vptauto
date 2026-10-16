@@ -48,6 +48,14 @@ def main():
     user.GetForegroundWindow.argtypes, user.GetForegroundWindow.restype = [], w.HWND
     user.SetForegroundWindow.argtypes, user.SetForegroundWindow.restype = [w.HWND], w.BOOL
     user.GetCursorPos.argtypes, user.GetCursorPos.restype = [c.POINTER(w.POINT)], w.BOOL
+    user.GetWindowLongPtrW.argtypes, user.GetWindowLongPtrW.restype = [w.HWND, c.c_int], c.c_ssize_t
+    user.SetWindowLongPtrW.argtypes, user.SetWindowLongPtrW.restype = [w.HWND, c.c_int, c.c_ssize_t], c.c_ssize_t
+
+    def settle(seconds):
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            app.processEvents()
+            time.sleep(.02)
 
     def cursor():
         p = w.POINT()
@@ -55,14 +63,17 @@ def main():
         return p.x, p.y
 
     results = []
-    for mode in ("production", "direct_send", "held", "hover_held", "focus_message", "posted", "posted_focus", "posted_active"):
-        player = subprocess.Popen([str(args.player.resolve()), str(movie.resolve())])
+    for mode in ("production", "direct_send", "held", "posted_focus", "posted_active", "noactivate_style", "style_focus", "style_active"):
+        startup = subprocess.STARTUPINFO()
+        startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startup.wShowWindow = 4
+        player = subprocess.Popen([str(args.player.resolve()), str(movie.resolve())], startupinfo=startup)
         try:
             desktop = WindowsDesktop(player.pid)
             for _ in range(40):
                 if desktop.find_window():break
                 time.sleep(.25)
-            time.sleep(.8)
+            settle(.8)
             cover.raise_()
             cover.activateWindow()
             cover.setFocus()
@@ -82,17 +93,20 @@ def main():
             report["target"] = int(hwnd)
             report["root"] = int(desktop.hwnd)
             position = (y << 16) | x
+            if mode in ("noactivate_style", "style_focus", "style_active"):
+                old_style = user.GetWindowLongPtrW(desktop.hwnd, -20)
+                user.SetWindowLongPtrW(desktop.hwnd, -20, old_style | 0x08000000)
             desktop.user.PostMessageW.argtypes, desktop.user.PostMessageW.restype = [w.HWND, w.UINT, w.WPARAM, w.LPARAM], w.BOOL
             if mode == "production":desktop.click(observation.force)
             elif mode == "direct_send":
                 for message, flags in ((0x200, 0), (0x201, 1), (0x202, 0)):
                     desktop._send(hwnd, message, flags, position)
-            elif mode.startswith("posted"):
-                if mode == "posted_focus":desktop.user.PostMessageW(hwnd, 0x0007, 0, 0)
-                if mode == "posted_active":desktop.user.PostMessageW(desktop.hwnd, 0x001C, 1, 0)
+            elif mode.startswith("posted") or mode.startswith("style") or mode == "noactivate_style":
+                if mode in ("posted_focus", "style_focus"):desktop.user.PostMessageW(hwnd, 0x0007, 0, 0)
+                if mode in ("posted_active", "style_active"):desktop.user.PostMessageW(desktop.hwnd, 0x001C, 1, 0)
                 for message, flags in ((0x200, 0), (0x201, 1), (0x202, 0)):
                     desktop.user.PostMessageW(hwnd, message, flags, position)
-                    time.sleep(.12)
+                    settle(.12)
             else:
                 if mode == "focus_message":desktop._send(hwnd, 0x0007, 0, 0)
                 desktop._send(hwnd, 0x200, 0, position)
@@ -100,7 +114,7 @@ def main():
                 desktop._send(hwnd, 0x201, 1, position)
                 time.sleep(.12)
                 desktop._send(hwnd, 0x202, 0, position)
-            time.sleep(.7)
+            settle(.7)
             image = desktop.capture()
             image.save(str(args.output / f"{mode}-after.png"))
             report.update(after=observe(image).kind, foreground_kept=user.GetForegroundWindow() == int(cover.winId()),

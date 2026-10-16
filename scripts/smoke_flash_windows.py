@@ -40,6 +40,7 @@ def main():
     user = c.WinDLL("user32", use_last_error=True)
     user.GetForegroundWindow.argtypes, user.GetForegroundWindow.restype = [], w.HWND
     user.GetCursorPos.argtypes, user.GetCursorPos.restype = [c.POINTER(w.POINT)], w.BOOL
+    user.GetWindowThreadProcessId.argtypes, user.GetWindowThreadProcessId.restype = [w.HWND, c.POINTER(w.DWORD)], w.DWORD
     results, statuses, players, inspectors, colors = {}, {}, {}, {}, {}
     control = LoginController(cover, stop_checker=lambda: False)
     control.status.connect(lambda key, message: statuses.__setitem__(key, message))
@@ -83,7 +84,11 @@ def main():
             print("::notice::Native Flash: three accounts enqueued", flush=True)
             return
         if cursor() != pointer[0]:return fail("Native Flash automation moved the physical pointer")
-        if user.GetForegroundWindow() != int(cover.winId()):return fail("Native Flash automation stole foreground focus")
+        if user.GetForegroundWindow() != int(cover.winId()):
+            pid = w.DWORD()
+            user.GetWindowThreadProcessId(user.GetForegroundWindow(), c.byref(pid))
+            owner = next((key for key, player in players.items() if player.pid == pid.value), f"other PID {pid.value}")
+            return fail(f"Native Flash automation lost foreground focus to {owner}")
         if typed[0] < 6:
             QTest.keyClicks(cover, f"typing-{typed[0]} ")
             typed[0] += 1
