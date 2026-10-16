@@ -95,9 +95,9 @@ def main() -> None:
     env = os.environ.copy()
     env.setdefault("QT_QPA_PLATFORM", "offscreen")
     subprocess.run([sys.executable, str(ROOT / "scripts/make_icon.py")], check=True, env=env)
-    defines = [f"-DSTAGE={STAGE}", f"-DAPP_VERSION={VERSION}", f"-DARTIFACTS={artifacts}", f"-DAPP_ICON={BUILD / 'app.ico'}"]
+    defines = [f"-DSTAGE={STAGE}", f"-DSTAGE_FILES={STAGE / '*'}", f"-DAPP_VERSION={VERSION}", f"-DARTIFACTS={artifacts}", f"-DAPP_ICON={BUILD / 'app.ico'}"]
     for script in ("launcher.nsi", "installer.nsi"):
-        subprocess.run([str(compiler), "-V3", *defines, str(ROOT / "packaging" / script)], check=True)
+        subprocess.run([str(compiler), "-V3", "-INPUTCHARSET", "UTF8", *defines, str(ROOT / "packaging" / script)], check=True)
     installer = artifacts / f"VPTAuto-Setup-{VERSION}.exe"
     digest = hashlib.sha256(installer.read_bytes()).hexdigest()
     (artifacts / f"{installer.name}.sha256").write_text(f"{digest}  {installer.name}\n", encoding="utf-8")

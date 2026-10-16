@@ -13,8 +13,6 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 20
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,25 +39,6 @@ jobs:
           Get-Content windows-build.log -Tail 80 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
           exit $buildExit
-      - name: Save packaging failure diagnostic
-        if: ${{ failure() && steps.build.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        shell: pwsh
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          New-Item -ItemType Directory -Force .github/diagnostics | Out-Null
-          'Windows packaging failure: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' | Set-Content .github/diagnostics/windows-build.txt
-          if (Test-Path windows-build.log) {
-            Get-Content windows-build.log -Tail 80 | Add-Content .github/diagnostics/windows-build.txt
-          } else {
-            'The build command did not create a log.' | Add-Content .github/diagnostics/windows-build.txt
-          }
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/diagnostics/windows-build.txt
-          git commit -m 'Record Windows packaging diagnostic'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git push origin HEAD:main
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Prepare portable download
         id: portable
         shell: pwsh

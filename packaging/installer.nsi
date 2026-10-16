@@ -27,7 +27,7 @@ VIAddVersionKey "LegalCopyright" "VPT Auto Manager contributors"
 Section "VPT Auto Manager" SEC_MAIN
   SetShellVarContext current
   SetOutPath "$INSTDIR"
-  File /r "${STAGE}/*"
+  File /r "${STAGE_FILES}"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$DESKTOP\VPT Auto Manager.lnk" "$INSTDIR\VPTAuto.exe"
   CreateShortcut "$SMPROGRAMS\VPT Auto Manager.lnk" "$INSTDIR\VPTAuto.exe"
