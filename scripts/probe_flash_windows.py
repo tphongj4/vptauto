@@ -55,7 +55,7 @@ def main():
         return p.x, p.y
 
     results = []
-    for mode in ("immediate", "held", "hover_held", "focus_message", "posted", "posted_focus", "posted_active"):
+    for mode in ("production", "direct_send", "held", "hover_held", "focus_message", "posted", "posted_focus", "posted_active"):
         player = subprocess.Popen([str(args.player.resolve()), str(movie.resolve())])
         try:
             desktop = WindowsDesktop(player.pid)
@@ -83,7 +83,10 @@ def main():
             report["root"] = int(desktop.hwnd)
             position = (y << 16) | x
             desktop.user.PostMessageW.argtypes, desktop.user.PostMessageW.restype = [w.HWND, w.UINT, w.WPARAM, w.LPARAM], w.BOOL
-            if mode == "immediate":desktop.click(observation.force)
+            if mode == "production":desktop.click(observation.force)
+            elif mode == "direct_send":
+                for message, flags in ((0x200, 0), (0x201, 1), (0x202, 0)):
+                    desktop._send(hwnd, message, flags, position)
             elif mode.startswith("posted"):
                 if mode == "posted_focus":desktop.user.PostMessageW(hwnd, 0x0007, 0, 0)
                 if mode == "posted_active":desktop.user.PostMessageW(desktop.hwnd, 0x001C, 1, 0)

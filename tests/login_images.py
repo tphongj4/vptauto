@@ -48,7 +48,7 @@ def scene(kind, scale=1.0, offset=(0, 0), background=True, gradient=False):
             control(rect, str(i + 1), "#eeb332" if i == 1 else "#3ac587" if i == 7 else "#00cbd7")
     if kind == "characters":
         for i, rect in enumerate(rectangles(kind)[:3]):
-            control(rect, "")
+            control(rect, "", color="#35b9c8")
             painter.fillRect(QRectF(rect[0] + 9, rect[1] + 8, 50, 58), QColor("#603784"))
             painter.setPen(QColor("white"))
             painter.drawText(QRectF(rect[0] + 65, rect[1] + 10, 92, 50), f"NV {i + 1}\nLV 130")

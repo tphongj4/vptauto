@@ -137,7 +137,7 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
             bottom, card_height = max(b.y + b.h for b in three), median(b.h for b in three)
             below = [b for b in buttons if .2 * card_height < b.center[1] - bottom < 2.2 * card_height]
             enters = [b for b in below if abs(b.center[0] - three[0].center[0]) < three[0].w * .95
-                      and 2.8 <= b.w / b.h <= 6.5]
+                      and .45 <= b.w / three[0].w <= .85]
             for enter in enters:
                 backs = [b for b in below if b is not enter
                          and abs(b.center[0] - three[2].center[0]) < three[2].w
@@ -149,26 +149,35 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
     # separated Enter/Back pair, and the reset-password button above the right
     # side; do not invent click positions for slots we cannot see.
     for enter in buttons:
-        if not (height * .6 < enter.center[1] < height * .94 and 2.8 <= enter.w / enter.h <= 6.5):
+        if not (height * .6 < enter.center[1] < height * .94 and 2.8 <= enter.w / enter.h <= 40):
             continue
         backs = [b for b in buttons if .45 <= b.w / enter.w <= .9
-                 and abs(b.center[1] - enter.center[1]) < enter.h * .6
+                 and abs(b.center[1] - enter.center[1]) < enter.w * .15
                  and 2.5 <= (b.center[0] - enter.center[0]) / enter.w <= 5]
         for back in backs:
             above = [b for b in cards if .8 <= (enter.center[1] - b.center[1]) / b.h <= 2.8
                      and enter.center[0] - b.w < b.center[0] < back.center[0] + b.w * .5]
             resets = [b for b in buttons if abs(b.center[0] - back.center[0]) < enter.w
-                      and 4 <= (enter.center[1] - b.center[1]) / enter.h <= 11]
+                      and 1.2 <= (enter.center[1] - b.center[1]) / enter.w <= 2.8]
             if above and resets:
                 return Observation("characters", enter=enter.center)
     # Start is the wider button above the smaller mandatory-login button.
+    login_pairs = []
     for small in buttons:
         if not width * .35 < small.center[0] < width * .65 or not height * .55 < small.center[1] < height * .94:
             continue
         for big in buttons:
             if (1.2 <= big.w / small.w <= 2.1 and abs(big.center[0] - small.center[0]) < small.w * .12
                     and .35 <= (small.center[1] - big.center[1]) / small.w <= .85):
-                return Observation("login", force=small.center)
+                panels = [p for p in boxes if p.w > big.w * 1.2 and p.w < small.w * 3.5
+                          and 1.3 <= p.w / p.h <= 2.8
+                          and p.x < small.x and p.x + p.w > small.x + small.w
+                          and p.y < big.y and p.y + p.h > small.y + small.h]
+                score = (abs(small.center[0] / width - .5) * 3
+                         + abs(small.center[1] / height - .81) - bool(panels))
+                login_pairs.append((score, small.center))
+    if login_pairs:
+        return Observation("login", force=min(login_pairs)[1])
     return Observation()
 
 

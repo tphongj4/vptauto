@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
     QHBoxLayout, QLabel, QLayout, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
@@ -285,7 +285,8 @@ class MainWindow(QMainWindow):
         self.drafts: dict[str, LinkDraft] = {}
         self.login_messages: dict[str, str] = {}
         self.auto_after_login: set[str] = set()
-        self.login_controller = login_controller if login_controller is not None else LoginController(self)
+        self.login_controller = login_controller if login_controller is not None else LoginController(
+            self, diagnostic_root=manager.store.path.parent / "ChanDoan")
         self.login_controller.status.connect(self.login_status_changed)
         self.login_controller.finished.connect(self.login_finished)
         self.setWindowTitle("VPT Auto Manager · Vua Pháp Thuật")
@@ -629,7 +630,13 @@ class MainWindow(QMainWindow):
         self.draft_status = label("", "muted", True)
         self.detail.addWidget(self.draft_status)
         self.login_status_label = label(self.login_messages.get(link.id, "Đăng nhập nền · Kênh ngẫu nhiên 1–8 · Nhân vật từ trái sang phải."), "muted", True)
-        self.detail.addWidget(self.login_status_label)
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.login_status_label, 1)
+        self.diagnostic_button = button("Ảnh lỗi", self.open_diagnostic)
+        self.diagnostic_button.setToolTip("Mở ảnh game lúc lỗi. Chữ thập đỏ đánh dấu điểm đã bấm; ảnh chỉ lưu trên máy này.")
+        status_row.addWidget(self.diagnostic_button)
+        self.detail.addLayout(status_row)
+        self.refresh_diagnostic_button()
         heading = QHBoxLayout()
         heading.addWidget(label("Cài đặt auto", "sectionTitle"))
         heading.addStretch()
@@ -882,9 +889,23 @@ class MainWindow(QMainWindow):
         self.login_messages[key] = message
         if self.selected_id == key and hasattr(self, "login_status_label"):
             self.login_status_label.setText(message)
+            self.refresh_diagnostic_button()
         if any(link.id == key for link in self.manager.state.links):
             self.update_link_row(key)
         self.statusBar().showMessage(message)
+
+    def refresh_diagnostic_button(self) -> None:
+        path = self.selected_diagnostic()
+        self.diagnostic_button.setVisible(bool(path and path.is_file()))
+
+    def selected_diagnostic(self):
+        getter = getattr(self.login_controller, "diagnostic_path", None)
+        return getter(self.selected_id) if getter and self.selected_id else None
+
+    def open_diagnostic(self) -> None:
+        path = self.selected_diagnostic()
+        if path and path.is_file():
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(path.resolve())))
 
     def login_finished(self, key: str, success: bool, message: str) -> None:
         self.login_status_changed(key, message)

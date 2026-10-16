@@ -29,6 +29,7 @@ class Desktop:
         self.clicks.append(point)
         if self.kind == "login": self.kind = "channels"
         elif self.kind == "channels": self.kind = "characters"
+        elif self.kind == "characters" and point[1] > 650: self.kind = "world"
         return True
 
 
@@ -54,6 +55,29 @@ def test_minimized_or_moving_window_pauses_without_clicking(qt_app):
     session.desktop.changed = False
     for i in range(10, 14):session.step(i * .4)
     assert len(session.desktop.clicks) == 1
+
+
+def test_ignored_background_click_does_not_claim_channel_screen(qt_app):
+    session = LoginSession(10, 1, 0, Desktop)
+    session.desktop.click = lambda point: True  # Windows accepts it; game ignores it.
+    from vptauto.login_flow import LoginError
+    with pytest.raises(LoginError, match="3 lần bấm nền Bắt buộc"):
+        for i in range(1, 35):session.step(i * .4)
+    assert session.pending.attempts == 3
+    assert "đang xác nhận game chuyển màn" in session.message
+
+
+def test_enter_is_confirmed_only_after_character_screen_disappears(qt_app):
+    session = LoginSession(10, 1, 0, Desktop)
+    session.desktop.kind = "characters"
+    session.desktop.click = lambda point: True
+    for i in range(1, 6):
+        assert session.step(i * .4) is False
+    assert session.flow.state == "done" and session.pending.name == "enter"
+    session.desktop.kind = "world"
+    assert not session.step(2.4)
+    assert not session.step(2.8)
+    assert session.step(3.2)
 
 
 class Worker(QObject):

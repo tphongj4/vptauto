@@ -31,12 +31,22 @@ def test_blank_screen_never_produces_click_targets():
     assert observe(image).kind == "unknown"
 
 
-@pytest.mark.parametrize("kind", ["login", "channels"])
+@pytest.mark.parametrize("kind", ["login", "channels", "characters"])
 @pytest.mark.parametrize("scale", [.65, 1, 1.5])
 def test_gradient_buttons_with_thin_cyan_strips_are_recognized(qt_app, kind, scale):
     frame = scene(kind, scale=scale, gradient=True)
     result = observe(frame)
     assert result.kind == kind
+
+
+def test_background_fragments_do_not_override_lower_center_login_controls(qt_app):
+    image = scene("login", gradient=True)
+    painter = QPainter(image)
+    painter.fillRect(545, 505, 150, 20, QColor("#00cbd7"))
+    painter.fillRect(570, 558, 100, 20, QColor("#00cbd7"))
+    painter.end()
+    result = observe(image)
+    assert result.kind == "login" and result.force[1] > 675
 
 
 @pytest.mark.parametrize("slot", [1, 2, 3])

@@ -76,6 +76,7 @@ class SimulatedGame(QWidget):
             if QRectF(*rectangles("characters")[3]).contains(point):
                 self.events.append("enter")
                 self.entered = self.selected == args.slot
+                self.kind = "world"
         self.report()
         self.update()
 

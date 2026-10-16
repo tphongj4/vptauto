@@ -15,6 +15,7 @@ if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vptauto.login_session import LoginSession
+from vptauto.login_diagnostics import save_failure
 
 
 def emit(event, **fields):
@@ -43,8 +44,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--pid", type=int, required=True)
     parser.add_argument("--parent-pid", type=int, required=True)
+    parser.add_argument("--diagnostic-path", type=Path, required=True)
     parser.add_argument("--slot", type=int, choices=(1, 2, 3), required=True)
     args = parser.parse_args()
+    session = None
     try:
         watch_parent(args.parent_pid)
         session = LoginSession(args.pid, args.slot, monotonic())
@@ -56,6 +59,10 @@ def main():
                 return 0
             sleep(.4)
     except Exception as error:
+        try:
+            save_failure(session, args.diagnostic_path)
+        except (OSError, ValueError):
+            pass
         emit("done", success=False, message=f"Đã dừng đăng nhập: {error}")
         return 1
 

@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import ctypes as c
 import sys
+from contextlib import contextmanager
 from ctypes import wintypes as w
+from time import sleep
 
 from PySide6.QtGui import QImage
 
@@ -45,6 +47,8 @@ class WindowsDesktop:
         self.callback_type = c.WINFUNCTYPE(w.BOOL, w.HWND, w.LPARAM)
         signatures = [
             (self.user, "SetProcessDpiAwarenessContext", [c.c_void_p], w.BOOL),
+            (self.user, "GetWindowDpiAwarenessContext", [w.HWND], c.c_void_p),
+            (self.user, "SetThreadDpiAwarenessContext", [c.c_void_p], c.c_void_p),
             (self.user, "EnumWindows", [self.callback_type, w.LPARAM], w.BOOL),
             (self.user, "GetWindowThreadProcessId", [w.HWND, c.POINTER(w.DWORD)], w.DWORD),
             (self.user, "GetClientRect", [w.HWND, c.POINTER(w.RECT)], w.BOOL),
@@ -57,6 +61,7 @@ class WindowsDesktop:
             (self.user, "PrintWindow", [w.HWND, w.HDC, w.UINT], w.BOOL),
             (self.user, "SendMessageTimeoutW", [w.HWND, w.UINT, w.WPARAM, w.LPARAM,
                                                w.UINT, w.UINT, c.POINTER(c.c_size_t)], c.c_ssize_t),
+            (self.user, "PostMessageW", [w.HWND, w.UINT, w.WPARAM, w.LPARAM], w.BOOL),
             (self.user, "GetDC", [w.HWND], w.HDC),
             (self.user, "ReleaseDC", [w.HWND, w.HDC], c.c_int),
             (self.gdi, "CreateCompatibleDC", [w.HDC], w.HDC),
@@ -102,6 +107,18 @@ class WindowsDesktop:
     def minimized(self) -> bool:
         return bool(self.user.IsIconic(self.hwnd))
 
+    @contextmanager
+    def window_units(self):
+        # Legacy Flash can be DPI-unaware while the helper is per-monitor
+        # aware. Capture, geometry and input must use the window's own units.
+        context = self.user.GetWindowDpiAwarenessContext(self.hwnd)
+        previous = self.user.SetThreadDpiAwarenessContext(context) if context else None
+        try:
+            yield
+        finally:
+            if previous:
+                self.user.SetThreadDpiAwarenessContext(previous)
+
     def geometry(self) -> tuple[int, int, int, int]:
         if not self.exists():
             raise LoginError("Cửa sổ Flash đã đóng hoặc không còn thuộc phiên vừa mở.")
@@ -111,6 +128,10 @@ class WindowsDesktop:
         return origin.x, origin.y, rect.right - rect.left, rect.bottom - rect.top
 
     def capture(self) -> QImage:
+        with self.window_units():
+            return self._capture()
+
+    def _capture(self) -> QImage:
         if self.minimized():
             raise LoginError("Hãy bỏ thu nhỏ cửa sổ Flash. Có thể để sau ứng dụng khác.")
         geometry = self.geometry()
@@ -148,6 +169,10 @@ class WindowsDesktop:
             self.user.ReleaseDC(self.hwnd, source)
 
     def _target(self, point):
+        with self.window_units():
+            return self._target_in_window_units(point)
+
+    def _target_in_window_units(self, point):
         screen = w.POINT(*point)
         if not self.user.ClientToScreen(self.hwnd, c.byref(screen)):
             raise LoginError("Không đọc được tọa độ Flash.")
@@ -170,20 +195,35 @@ class WindowsDesktop:
                                                   0x0002 | 0x0020, 500, c.byref(result)))
 
     def click(self, point: tuple[int, int]) -> bool:
+        with self.window_units():
+            return self._click(point)
+
+    def _click(self, point: tuple[int, int]) -> bool:
         if self.minimized() or self.geometry() != self.last_geometry:
             return False
         _, _, width, height = self.last_geometry
         x, y = point
         if not 0 <= x < width or not 0 <= y < height:
             raise LoginError("Điểm bấm nằm ngoài vùng Flash; đã dừng.")
-        target, (x, y) = self._target(point)
+        target, (x, y) = self._target_in_window_units(point)
         if not 0 <= x <= 32767 or not 0 <= y <= 32767:
             raise LoginError("Tọa độ cửa sổ con Flash không hợp lệ.")
         position = (y << 16) | x
-        if not self._send(target, 0x0200, 0, position):  # WM_MOUSEMOVE, to HWND only.
+        if not self._send(target, 0, 0, 0):  # Bounded WM_NULL responsiveness check.
             raise LoginError("Cửa sổ Flash không nhận thao tác nền hoặc đang bị treo.")
-        down = self._send(target, 0x0201, 1, position)
-        up = self._send(target, 0x0202, 0, position)  # Release even when down timed out.
+        post = self.user.PostMessageW
+        # Queue real window messages so Flash's message pump sees them. Give
+        # hover/down two frames at 25fps instead of collapsing down/up together.
+        if not post(target, 0x0200, 0, position):
+            raise LoginError("Không gửi được vị trí chuột nền tới Flash.")
+        sleep(.08)
+        if not self.owns(target) or self.geometry() != self.last_geometry:
+            return False
+        down = post(target, 0x0201, 1, position)
+        try:
+            sleep(.08)
+        finally:
+            up = post(target, 0x0202, 0, position)
         if not down or not up:
             raise LoginError("Không gửi được thao tác nền. Flash và ứng dụng cần chạy cùng mức quyền.")
         return True

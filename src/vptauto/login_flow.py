@@ -34,7 +34,7 @@ class LoginFlow:
     def message(self) -> str:
         return {
             "login": "Chờ màn đăng nhập và nút Bắt buộc…",
-            "channel": "Chờ danh sách 8 kênh…",
+            "channel": "Đã gửi bấm Bắt buộc; đang xác nhận danh sách 8 kênh…",
             "character": f"Đã chọn kênh {self.channel}; chờ màn nhân vật…" if self.channel else "Chờ màn chọn nhân vật…",
             "enter": f"Đã chọn nhân vật {self.slot}; chờ nút Vào game…",
             "done": f"Đã bấm Vào game · Nhân vật {self.slot}" + (f" · Kênh {self.channel}" if self.channel else ""),
@@ -54,6 +54,10 @@ class LoginFlow:
             return None
         if self.state == "login" and observation.kind in ("channels", "characters"):
             self.state = "channel" if observation.kind == "channels" else "character"
+            self.changed = now
+            self.reset_stability()
+        if self.state == "channel" and observation.kind == "characters":
+            self.state = "character"
             self.changed = now
             self.reset_stability()
         click = None

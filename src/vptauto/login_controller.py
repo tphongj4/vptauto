@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import tempfile
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,10 +30,11 @@ class LoginController(QObject):
     finished = Signal(str, bool, str)
     busy_changed = Signal(bool)
 
-    def __init__(self, parent=None, process_factory=QProcess, stop_checker=stop_requested):
+    def __init__(self, parent=None, process_factory=QProcess, stop_checker=stop_requested, diagnostic_root=None):
         super().__init__(parent)
         self.enabled = sys.platform == "win32"
         self.process_factory, self.stop_checker = process_factory, stop_checker
+        self.diagnostic_root = Path(diagnostic_root) if diagnostic_root is not None else Path(tempfile.gettempdir()) / "VPTAuto" / "ChanDoan"
         self.jobs: dict[str, Job] = {}
         self.timer = QTimer(self)
         self.timer.setInterval(400)
@@ -40,10 +43,19 @@ class LoginController(QObject):
     def has_link(self, key: str) -> bool:
         return key in self.jobs
 
+    def diagnostic_path(self, key: str) -> Path:
+        return self.diagnostic_root / hashlib.sha256(key.encode()).hexdigest()[:20] / "last.png"
+
     def enqueue(self, process, key: str, slot: int) -> None:
         slot = clean_character_slot(slot)
         if self.has_link(key):
             return
+        diagnostic = self.diagnostic_path(key)
+        for path in (diagnostic, diagnostic.with_suffix(".json")):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
         worker = self.process_factory(self)
         now = monotonic()
         job = Job(process, worker, now, now)
@@ -57,6 +69,7 @@ class LoginController(QObject):
         worker.setProgram(str(executable))
         worker.setArguments(["-u", str(Path(__file__).with_name("login_worker.py")),
                              "--parent-pid", str(os.getpid()),
+                             "--diagnostic-path", str(diagnostic),
                              "--pid", str(process.pid), "--slot", str(slot)])
         self._message(key, job, "Đang tự đăng nhập nền · các link chạy độc lập…")
         self.busy_changed.emit(True)
