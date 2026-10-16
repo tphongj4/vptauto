@@ -204,7 +204,9 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
         if len(notices) == 1:
             return Observation("login_notice", force=force, confirm=next(iter(notices)))
         if has_notice_frame:
-            return Observation()  # Do not click through an ambiguous modal.
+            # It is still a login screen. Unknown is reserved for departing
+            # the character screen, so it could falsely confirm Enter here.
+            return Observation("login")  # Visible modal, no safe click target.
         return Observation("login", force=force)
     return Observation()
 

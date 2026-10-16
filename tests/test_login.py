@@ -54,7 +54,7 @@ def test_notice_requires_login_controls_and_a_single_confirmation_button(qt_app)
     painter.fillRect(510, 445, 75, 18, QColor("#00cbd7"))
     painter.end()
     result = observe(image)
-    assert result.kind == "unknown" and result.force is None
+    assert result.kind == "login" and result.force is None and result.confirm is None
 
 
 def test_progress_dialog_never_becomes_confirmation_target(qt_app):
