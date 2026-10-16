@@ -29,7 +29,15 @@ jobs:
         run: choco install nsis --yes --no-progress
       - name: Build installer
         id: build
-        run: python scripts/build_windows.py --makensis 'C:\Program Files (x86)\NSIS\makensis.exe'
+        shell: pwsh
+        run: |
+          python scripts/build_windows.py --makensis 'C:\Program Files (x86)\NSIS\makensis.exe' 2>&1 | Tee-Object -FilePath windows-build.log
+          $buildExit = $LASTEXITCODE
+          "### Windows packaging (exit $buildExit)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '```text' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          Get-Content windows-build.log -Tail 80 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          exit $buildExit
       - name: Prepare portable download
         id: portable
         shell: pwsh
