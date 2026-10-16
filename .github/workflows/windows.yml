@@ -1,0 +1,87 @@
+name: Windows checks and installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Test desktop workflow
+        timeout-minutes: 3
+        run: python -m pytest -q
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Build installer
+        id: build
+        run: python scripts/build_windows.py --makensis 'C:\Program Files (x86)\NSIS\makensis.exe'
+      - name: Prepare portable download
+        id: portable
+        shell: pwsh
+        run: Expand-Archive -Path artifacts/VPTAuto-Portable-0.2.1.zip -DestinationPath build/portable-artifact
+      - name: Test portable app without installation
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $zipPath = (Resolve-Path artifacts/VPTAuto-Portable-0.2.1.zip).Path
+          $portableDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Portable Test'
+          Expand-Archive -Path $zipPath -DestinationPath $portableDir
+          $appDir = Join-Path $portableDir 'VPTAuto-0.2.1'
+          $dataDir = Join-Path $portableDir 'Test Data'
+          $result = Start-Process -FilePath (Join-Path $appDir 'VPTAuto.exe') -ArgumentList @('--smoke-test', '--data-dir', "`"$dataDir`"") -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw 'Portable app smoke test failed' }
+      - name: Install, open, and uninstall packaged app
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path artifacts/VPTAuto-Setup-0.2.1.exe).Path
+          $installDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Package Test'
+          $dataDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Test Data'
+          $result = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw 'Installer failed' }
+          $appPath = Join-Path $installDir 'VPTAuto.exe'
+          if (!(Test-Path $appPath)) { throw 'Installed executable missing' }
+          New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+          $configPath = Join-Path $dataDir 'settings.json'
+          '{"schema_version":1,"flash_player_path":"","links":[],"tasks":[]}' | Set-Content -Path $configPath -Encoding utf8
+          $before = (Get-FileHash -Path $configPath -Algorithm SHA256).Hash
+          $result = Start-Process -FilePath $appPath -ArgumentList @('--smoke-test', '--data-dir', "`"$dataDir`"") -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw 'Packaged app smoke test failed' }
+          $result = Start-Process -FilePath (Join-Path $installDir 'Uninstall.exe') -ArgumentList '/S' -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw 'Uninstaller failed' }
+          if (Test-Path $appPath) { throw 'Installed executable remains after uninstall' }
+          if ((Get-FileHash -Path $configPath -Algorithm SHA256).Hash -ne $before) { throw 'Uninstaller changed user data' }
+      - name: Upload portable download
+        if: ${{ always() && steps.portable.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: VPTAuto-Portable-0.2.1
+          path: build/portable-artifact/VPTAuto-0.2.1/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload installer download
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: VPTAuto-Installer-0.2.1
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            artifacts/VPTAuto-Setup-0.2.1.exe
+            artifacts/VPTAuto-Setup-0.2.1.exe.sha256
+            artifacts/build-manifest.json

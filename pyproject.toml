@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=75,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vptauto"
+version = "0.2.1"
+description = "Trình quản lý link và cấu hình nhiệm vụ Vua Pháp Thuật trên Windows"
+requires-python = ">=3.11"
+dependencies = ["PySide6-Essentials==6.8.3"]
+
+[project.scripts]
+vptauto = "vptauto.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

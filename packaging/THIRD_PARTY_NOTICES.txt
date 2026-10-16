@@ -1,0 +1,24 @@
+VPT Auto Manager 0.2.1
+
+The Windows installer includes these unmodified runtime components:
+
+Python 3.12.10 (Python Software Foundation license)
+  Official Windows runtime: https://www.nuget.org/packages/python/3.12.10
+  Source and license: https://www.python.org/downloads/release/python-31210/
+  Included license: runtime/LICENSE.txt
+
+PySide6 Essentials and shiboken6 6.8.3 (Qt for Python)
+  Distributed under the LGPLv3/GPLv3 and Qt's accompanying component licenses.
+  License texts are retained in runtime/Lib/site-packages/*dist-info/licenses
+  and in the package contents. Refer to those files for the applicable terms.
+  Source: https://github.com/pyside/pyside-setup/tree/v6.8.3
+  Qt source: https://download.qt.io/archive/qt/6.8/6.8.3/
+  Runtime libraries are dynamically loaded and may be replaced in the runtime
+  directory with compatible builds. No integrity check prevents replacement.
+
+NSIS (Nullsoft Scriptable Install System)
+  https://nsis.sourceforge.io/License
+  NSIS-generated installer/launcher stubs are distributed under their license.
+
+Adobe Flash Player and the game are NOT included in this installer.
+Select an existing local Flash Player executable in the application settings.
