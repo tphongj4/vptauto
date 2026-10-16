@@ -29,6 +29,12 @@ def clean_url(value: str) -> str:
     return url
 
 
+def clean_character_slot(value: int) -> int:
+    if type(value) is not int or value not in (1, 2, 3):
+        raise ValueError("Vị trí nhân vật phải là 1, 2 hoặc 3 (từ trái sang phải).")
+    return value
+
+
 @dataclass
 class GameLink:
     id: str
@@ -36,6 +42,7 @@ class GameLink:
     url: str
     task_ids: list[str] = field(default_factory=list)
     last_opened: str | None = None
+    character_slot: int = 1
 
 
 @dataclass
@@ -92,5 +99,6 @@ class AppState:
             if last_opened is not None and not isinstance(last_opened, str):
                 raise ValueError("Thời gian mở không hợp lệ.")
             link_ids.add(key)
-            links.append(GameLink(key, name, url, selected, last_opened))
+            slot = clean_character_slot(item.get("character_slot", 1))
+            links.append(GameLink(key, name, url, selected, last_opened, slot))
         return cls(flash_player_path=player, links=links, tasks=tasks)

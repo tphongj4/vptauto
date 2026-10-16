@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from .models import AppState, GameLink, TaskType, clean_name, clean_url
+from .models import AppState, GameLink, TaskType, clean_character_slot, clean_name, clean_url
 from .storage import JsonStore
 
 
@@ -17,6 +17,7 @@ class AutoPlan:
     url: str
     task_ids: tuple[str, ...]
     task_names: tuple[str, ...]
+    character_slot: int = 1
 
 
 class Manager:
@@ -36,19 +37,24 @@ class Manager:
     def save_link(
         self, name: str, url: str, key: str | None = None,
         selected_ids: list[str] | None = None,
+        character_slot: int | None = None,
     ) -> str:
         name, url = clean_name(name), clean_url(url)
         if selected_ids is not None:
             self._validate_tasks(selected_ids)
+        if character_slot is not None:
+            character_slot = clean_character_slot(character_slot)
         state = deepcopy(self.state)
         if key is None:
             key = uuid4().hex
-            state.links.append(GameLink(key, name, url, list(selected_ids or [])))
+            state.links.append(GameLink(key, name, url, list(selected_ids or []), character_slot=character_slot or 1))
         else:
             link = next(link for link in state.links if link.id == key)
             link.name, link.url = name, url
             if selected_ids is not None:
                 link.task_ids = list(selected_ids)
+            if character_slot is not None:
+                link.character_slot = character_slot
         self._commit(state)
         return key
 
@@ -76,7 +82,7 @@ class Manager:
         if not link.task_ids:
             raise ValueError("Link này chưa có nhiệm vụ đã lưu. Chọn nhiệm vụ và bấm Sửa trước.")
         names = {task.id: task.name for task in self.state.tasks}
-        return AutoPlan(link.id, link.name, link.url, tuple(link.task_ids), tuple(names[key] for key in link.task_ids))
+        return AutoPlan(link.id, link.name, link.url, tuple(link.task_ids), tuple(names[key] for key in link.task_ids), link.character_slot)
 
     def add_task(self, name: str, description: str = "") -> str:
         name, description = clean_name(name), description.strip()

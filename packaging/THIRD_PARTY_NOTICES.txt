@@ -1,4 +1,4 @@
-VPT Auto Manager 0.2.1
+VPT Auto Manager 0.3.0
 
 The Windows installer includes these unmodified runtime components:
 

@@ -116,3 +116,27 @@ def test_combined_edit_rejects_missing_task_without_partial_update(tmp_path):
         manager.save_link("Tên mới", "https://example.com/new.swf", key, ["missing"])
     assert manager.store.path.read_bytes() == before
     assert manager.get_link(key).name == "Tên cũ"
+
+
+def test_character_slot_is_saved_per_link_and_old_config_defaults_to_one(tmp_path):
+    store = JsonStore(tmp_path / "settings.json")
+    store.path.write_text(json.dumps({"schema_version": 1, "tasks": [], "links": [
+        {"id": "old", "name": "Cũ", "url": "https://example.com/old.swf"}
+    ]}), encoding="utf-8")
+    manager = Manager(store)
+    assert manager.get_link("old").character_slot == 1
+    second = manager.save_link("Phụ", "https://example.com/new.swf", character_slot=2)
+    manager.save_link("Cũ sửa", "https://example.com/old.swf", "old", character_slot=3)
+    restored = Manager(store)
+    assert restored.get_link("old").character_slot == 3
+    assert restored.get_link(second).character_slot == 2
+
+
+@pytest.mark.parametrize("slot", [0, 4, True, "2", 2.0])
+def test_invalid_character_slot_does_not_change_config(tmp_path, slot):
+    manager = Manager(JsonStore(tmp_path / "settings.json"))
+    key = manager.save_link("Chính", "https://example.com/game.swf")
+    before = manager.store.path.read_bytes()
+    with pytest.raises(ValueError):
+        manager.save_link("Đổi tên", "https://example.com/new.swf", key, character_slot=slot)
+    assert manager.store.path.read_bytes() == before

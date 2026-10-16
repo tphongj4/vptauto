@@ -25,6 +25,9 @@ jobs:
       - name: Test desktop workflow
         timeout-minutes: 3
         run: python -m pytest -q
+      - name: Test native Windows login capture and mouse input
+        timeout-minutes: 2
+        run: python scripts/smoke_login_windows.py
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Build installer
@@ -42,15 +45,15 @@ jobs:
       - name: Prepare portable download
         id: portable
         shell: pwsh
-        run: Expand-Archive -Path artifacts/VPTAuto-Portable-0.2.1.zip -DestinationPath build/portable-artifact
+        run: Expand-Archive -Path artifacts/VPTAuto-Portable-0.3.0.zip -DestinationPath build/portable-artifact
       - name: Test portable app without installation
         timeout-minutes: 3
         shell: pwsh
         run: |
-          $zipPath = (Resolve-Path artifacts/VPTAuto-Portable-0.2.1.zip).Path
+          $zipPath = (Resolve-Path artifacts/VPTAuto-Portable-0.3.0.zip).Path
           $portableDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Portable Test'
           Expand-Archive -Path $zipPath -DestinationPath $portableDir
-          $appDir = Join-Path $portableDir 'VPTAuto-0.2.1'
+          $appDir = Join-Path $portableDir 'VPTAuto-0.3.0'
           $dataDir = Join-Path $portableDir 'Test Data'
           $result = Start-Process -FilePath (Join-Path $appDir 'VPTAuto.exe') -ArgumentList @('--smoke-test', '--data-dir', "`"$dataDir`"") -Wait -PassThru
           if ($result.ExitCode -ne 0) { throw 'Portable app smoke test failed' }
@@ -58,7 +61,7 @@ jobs:
         timeout-minutes: 3
         shell: pwsh
         run: |
-          $installer = (Resolve-Path artifacts/VPTAuto-Setup-0.2.1.exe).Path
+          $installer = (Resolve-Path artifacts/VPTAuto-Setup-0.3.0.exe).Path
           $installDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Package Test'
           $dataDir = Join-Path $env:RUNNER_TEMP 'VPTAuto Test Data'
           $result = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$installDir") -Wait -PassThru
@@ -79,18 +82,18 @@ jobs:
         if: ${{ always() && steps.portable.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: VPTAuto-Portable-0.2.1
-          path: build/portable-artifact/VPTAuto-0.2.1/
+          name: VPTAuto-Portable-0.3.0
+          path: build/portable-artifact/VPTAuto-0.3.0/
           if-no-files-found: error
           retention-days: 14
       - name: Upload installer download
         if: ${{ always() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: VPTAuto-Installer-0.2.1
+          name: VPTAuto-Installer-0.3.0
           if-no-files-found: error
           retention-days: 14
           path: |
-            artifacts/VPTAuto-Setup-0.2.1.exe
-            artifacts/VPTAuto-Setup-0.2.1.exe.sha256
+            artifacts/VPTAuto-Setup-0.3.0.exe
+            artifacts/VPTAuto-Setup-0.3.0.exe.sha256
             artifacts/build-manifest.json

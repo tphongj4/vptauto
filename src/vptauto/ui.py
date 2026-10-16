@@ -7,14 +7,15 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
-    QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFrame,
+    QHBoxLayout, QLabel, QLayout, QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
     QMessageBox, QPushButton, QScrollArea, QSizePolicy, QStackedWidget, QStyle, QStyleOptionButton,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
 from . import __version__, launcher
 from .models import GameLink
+from .login_controller import LoginController
 from .service import Manager
 from .storage import StorageError
 
@@ -49,9 +50,10 @@ QLabel#muted { color: #80869c; }
 QLabel#badge { color: #7154dc; background: #efeafb; border-radius: 5px; padding: 4px 8px; font-size: 11px; }
 QLabel#avatar { color: #7154dc; background: #efebfb; border-radius: 12px; font-size: 18px; font-weight: 700; }
 QLabel#emptyIcon { font-size: 35px; color: #aa98d8; }
-QLineEdit, QTextEdit { border: 1px solid #e0e3ed; border-radius: 7px; background: #fff;
+QLineEdit, QTextEdit, QComboBox { border: 1px solid #e0e3ed; border-radius: 7px; background: #fff;
     padding: 10px; selection-background-color: #7154dc; }
 QLineEdit:focus, QTextEdit:focus { border-color: #967ce9; }
+QComboBox::drop-down { width: 22px; border: none; }
 QLineEdit:read-only { background: #f8f9fc; color: #7a8097; }
 QListWidget { background: transparent; border: none; outline: none; }
 QListWidget::item { border: 1px solid transparent; border-radius: 9px; margin: 3px 0; }
@@ -154,13 +156,25 @@ class LinkDraft:
     name: str
     url: str
     task_ids: list[str]
+    character_slot: int = 1
 
     @classmethod
     def from_link(cls, link: GameLink) -> LinkDraft:
-        return cls(link.name, link.url, list(link.task_ids))
+        return cls(link.name, link.url, list(link.task_ids), link.character_slot)
 
     def matches(self, link: GameLink) -> bool:
-        return self.name == link.name and self.url == link.url and set(self.task_ids) == set(link.task_ids)
+        return (self.name == link.name and self.url == link.url
+                and set(self.task_ids) == set(link.task_ids) and self.character_slot == link.character_slot)
+
+
+def character_combo(slot: int) -> QComboBox:
+    combo = QComboBox()
+    for value, name in ((1, "Nhân vật 1"), (2, "Nhân vật 2"), (3, "Nhân vật 3")):
+        combo.addItem(name, value)
+    combo.setCurrentIndex(combo.findData(slot))
+    combo.setAccessibleName("Vị trí nhân vật từ trái sang phải")
+    combo.setToolTip("Chọn vị trí trên màn chọn nhân vật: 1 = trái, 2 = giữa, 3 = phải.")
+    return combo
 
 
 class LinkDialog(QDialog):
@@ -187,6 +201,9 @@ class LinkDialog(QDialog):
         self.url_input.setMaxLength(8192)
         self.url_input.setPlaceholderText("https://…")
         layout.addWidget(self.url_input)
+        layout.addWidget(label("Vị trí nhân vật (1 = trái, 2 = giữa, 3 = phải)"))
+        self.slot_input = character_combo(link.character_slot if link else 1)
+        layout.addWidget(self.slot_input)
         layout.addWidget(label(
             "Dán link mở game bạn đang dùng trong Flash Player. Nút này tạo mục lưu link; "
             "không tạo đường dẫn đăng nhập từ tài khoản.", "muted", True
@@ -205,7 +222,8 @@ class LinkDialog(QDialog):
     def save(self) -> None:
         try:
             self.saved_id = self.manager.save_link(
-                self.name_input.text(), self.url_input.text(), self.link.id if self.link else None
+                self.name_input.text(), self.url_input.text(), self.link.id if self.link else None,
+                character_slot=self.slot_input.currentData(),
             )
         except (ValueError, StorageError) as error:
             self.error.setText(str(error))
@@ -260,11 +278,16 @@ class TaskDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, manager: Manager):
+    def __init__(self, manager: Manager, login_controller=None):
         super().__init__()
         self.manager = manager
         self.selected_id: str | None = None
         self.drafts: dict[str, LinkDraft] = {}
+        self.login_messages: dict[str, str] = {}
+        self.auto_after_login: set[str] = set()
+        self.login_controller = login_controller if login_controller is not None else LoginController(self)
+        self.login_controller.status.connect(self.login_status_changed)
+        self.login_controller.finished.connect(self.login_finished)
         self.setWindowTitle("VPT Auto Manager · Vua Pháp Thuật")
         self.setWindowIcon(app_icon())
         self.resize(1280, 820)
@@ -325,6 +348,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.build_settings_page())
         area.addWidget(self.pages, 1)
         outer.addWidget(content, 1)
+        self.stop_login_button = button("Dừng đăng nhập (F8)", lambda: self.login_controller.cancel_all())
+        self.stop_login_button.hide()
+        self.statusBar().addPermanentWidget(self.stop_login_button)
+        self.login_controller.busy_changed.connect(self.stop_login_button.setVisible)
         self.statusBar().showMessage("Cấu hình được lưu trên máy tính này. Chọn một link để bắt đầu.")
         self.refresh()
         self.navigate(0)
@@ -379,8 +406,18 @@ class MainWindow(QMainWindow):
         list_layout.addWidget(self.list_empty, 1)
         list_layout.addWidget(label("Mỗi link có lựa chọn nhiệm vụ riêng.", "muted", True))
         panels.addWidget(list_frame, 4)
-        detail_frame, self.detail = card()
+        detail_frame, detail_outer = card()
         detail_frame.setMinimumWidth(380)
+        detail_outer.setContentsMargins(0, 0, 0, 0)
+        detail_scroll = QScrollArea()
+        detail_scroll.setWidgetResizable(True)
+        detail_body = QWidget()
+        self.detail = QVBoxLayout(detail_body)
+        self.detail.setContentsMargins(22, 20, 22, 20)
+        self.detail.setSpacing(12)
+        self.detail.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        detail_scroll.setWidget(detail_body)
+        detail_outer.addWidget(detail_scroll)
         panels.addWidget(detail_frame, 5)
         layout.addLayout(panels, 1)
         return page
@@ -528,10 +565,12 @@ class MainWindow(QMainWindow):
         domain.setMinimumWidth(0)
         domain.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         texts.addWidget(domain)
-        texts.addWidget(label(
-            "● Có thay đổi chưa lưu" if link.id in self.drafts else f"{len(link.task_ids)} nhiệm vụ đã lưu",
-            "muted",
-        ))
+        detail = ("● Có thay đổi chưa lưu" if link.id in self.drafts else
+                  self.login_messages.get(link.id, f"Nhân vật {link.character_slot} · {len(link.task_ids)} nhiệm vụ đã lưu"))
+        summary = label(detail, "muted")
+        summary.setToolTip(detail)
+        summary.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        texts.addWidget(summary)
         layout.addLayout(texts, 1)
         return row
 
@@ -559,7 +598,12 @@ class MainWindow(QMainWindow):
         self.editor_name.setAccessibleName("Tên link")
         self.editor_name.setPlaceholderText("Tên link")
         self.editor_name.setMaxLength(80)
-        self.detail.addWidget(self.editor_name)
+        name_row = QHBoxLayout()
+        name_row.addWidget(self.editor_name, 1)
+        self.editor_slot = character_combo(draft.character_slot)
+        self.editor_slot.setObjectName("selectedCharacterSlot")
+        name_row.addWidget(self.editor_slot)
+        self.detail.addLayout(name_row)
         url_row = QHBoxLayout()
         self.editor_url = QLineEdit(draft.url)
         self.editor_url.setObjectName("selectedUrl")
@@ -572,7 +616,7 @@ class MainWindow(QMainWindow):
         self.detail.addLayout(url_row)
         actions = QHBoxLayout()
         login = button("Đăng nhập", self.open_selected, "primary")
-        login.setToolTip("Mở link đã lưu bằng Flash Player.")
+        login.setToolTip("Mở link, bấm Bắt buộc, chọn kênh ngẫu nhiên và nhân vật đã lưu, rồi bấm Vào game.")
         actions.addWidget(login, 1)
         self.save_button = button("Sửa", self.edit_link)
         self.save_button.setToolTip("Lưu tên, link và toàn bộ lựa chọn auto của link này.")
@@ -584,6 +628,8 @@ class MainWindow(QMainWindow):
         self.detail.addLayout(actions)
         self.draft_status = label("", "muted", True)
         self.detail.addWidget(self.draft_status)
+        self.login_status_label = label(self.login_messages.get(link.id, "Kênh ngẫu nhiên 1–8 · Nhân vật tính từ trái sang phải."), "muted", True)
+        self.detail.addWidget(self.login_status_label)
         heading = QHBoxLayout()
         heading.addWidget(label("Cài đặt auto", "sectionTitle"))
         heading.addStretch()
@@ -593,6 +639,7 @@ class MainWindow(QMainWindow):
         self.detail.addLayout(heading)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setMinimumHeight(80)
         tasks_widget = QWidget()
         tasks_layout = QVBoxLayout(tasks_widget)
         tasks_layout.setContentsMargins(0, 0, 8, 0)
@@ -616,12 +663,13 @@ class MainWindow(QMainWindow):
         self.detail.addWidget(scroll, 1)
         self.editor_name.textChanged.connect(self.update_draft)
         self.editor_url.textChanged.connect(self.update_draft)
+        self.editor_slot.currentIndexChanged.connect(self.update_draft)
         self.update_draft_status()
         notice = QFrame()
         notice.setObjectName("notice")
         notice_layout = QVBoxLayout(notice)
         notice_layout.setContentsMargins(13, 10, 13, 10)
-        notice_layout.addWidget(label("Phần thực thi auto sẽ bổ sung sau.", wrap=True))
+        notice_layout.addWidget(label("Đã có tự đăng nhập. Auto nhiệm vụ sẽ bổ sung sau.", wrap=True))
         self.detail.addWidget(notice)
 
     def update_link_row(self, key: str) -> None:
@@ -637,6 +685,7 @@ class MainWindow(QMainWindow):
         draft = LinkDraft(
             self.editor_name.text(), self.editor_url.text(),
             [key for key, checkbox in self.task_checks.items() if checkbox.isChecked()],
+            self.editor_slot.currentData(),
         )
         if draft.matches(self.manager.get_link(self.selected_id)):
             self.drafts.pop(self.selected_id, None)
@@ -698,7 +747,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("Không có thay đổi cần lưu.", 4000)
             return
         try:
-            self.manager.save_link(draft.name, draft.url, key, draft.task_ids)
+            self.manager.save_link(draft.name, draft.url, key, draft.task_ids, draft.character_slot)
         except (ValueError, StorageError) as error:
             self.show_error(error)
             return
@@ -720,6 +769,7 @@ class MainWindow(QMainWindow):
         if answer == QMessageBox.StandardButton.Yes:
             try:
                 self.manager.delete_link(self.selected_id)
+                self.login_controller.cancel_link(self.selected_id)
                 self.selected_id = None
                 self.refresh()
                 self.statusBar().showMessage("Đã xóa link.", 6000)
@@ -768,10 +818,13 @@ class MainWindow(QMainWindow):
         except (ValueError, StorageError) as error:
             self.show_error(error)
 
-    def open_selected(self) -> bool:
+    def open_selected(self, *, run_tasks: bool = False) -> bool:
         if self.selected_id is None:
             return False
         link = self.manager.get_link(self.selected_id)
+        if self.login_controller.has_link(link.id):
+            self.statusBar().showMessage("Link này đang trong luồng đăng nhập. Nhấn F8 nếu cần dừng.", 6000)
+            return False
         try:
             process = launcher.open_game(self.manager.state.flash_player_path, link.url)
         except (ValueError, launcher.LaunchError) as error:
@@ -786,14 +839,24 @@ class MainWindow(QMainWindow):
             self.show_error("Đã gửi lệnh mở game nhưng không lưu được lịch sử mở.")
         self.statusBar().showMessage("Đã gửi link đến Flash Player. Kiểm tra cửa sổ game để xem kết quả.", 8000)
         QTimer.singleShot(1000, lambda: self.check_launch(process))
+        self._queued_login = bool(self.login_controller.enabled and type(process.pid) is int and process.pid > 0)
+        if self._queued_login:
+            if run_tasks:
+                self.auto_after_login.add(link.id)
+            self.login_controller.enqueue(process, link.id, link.character_slot)
         return True
 
     def run_auto(self) -> None:
         if self.selected_id is None:
             return
         key = self.selected_id
-        if not self.open_selected():
+        if not self.open_selected(run_tasks=True):
             return
+        if self._queued_login:
+            return
+        self.show_auto_summary(key)
+
+    def show_auto_summary(self, key: str, *, dialog: bool = True) -> None:
         try:
             plan = self.manager.auto_plan(key)
         except ValueError:
@@ -810,7 +873,25 @@ class MainWindow(QMainWindow):
             )
         if key in self.drafts:
             text += "\nCác thay đổi chưa bấm Sửa không được áp dụng."
-        QMessageBox.information(self, "Chạy auto theo cài đặt đã lưu", text)
+        if dialog:
+            QMessageBox.information(self, "Chạy auto theo cài đặt đã lưu", text)
+        else:
+            self.login_status_changed(key, self.login_messages.get(key, "") + " · Auto nhiệm vụ chưa tích hợp.")
+
+    def login_status_changed(self, key: str, message: str) -> None:
+        self.login_messages[key] = message
+        if self.selected_id == key and hasattr(self, "login_status_label"):
+            self.login_status_label.setText(message)
+        if any(link.id == key for link in self.manager.state.links):
+            self.update_link_row(key)
+        self.statusBar().showMessage(message)
+
+    def login_finished(self, key: str, success: bool, message: str) -> None:
+        self.login_status_changed(key, message)
+        run_tasks = key in self.auto_after_login
+        self.auto_after_login.discard(key)
+        if success and run_tasks and any(link.id == key for link in self.manager.state.links):
+            self.show_auto_summary(key, dialog=False)
 
     def closeEvent(self, event) -> None:
         if self.drafts:
@@ -824,6 +905,7 @@ class MainWindow(QMainWindow):
             if answer != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
+        self.login_controller.cancel_all("Đã đóng trình quản lý; dừng tự đăng nhập.")
         event.accept()
 
     def check_launch(self, process) -> None:

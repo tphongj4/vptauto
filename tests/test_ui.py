@@ -1,13 +1,38 @@
 from unittest.mock import Mock
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QCheckBox, QDialog, QMessageBox, QPushButton
 
 from vptauto.service import Manager
 from vptauto.storage import JsonStore, StorageError
 from vptauto.ui import LinkDialog, MainWindow, TaskDialog
+
+
+class LoginSpy(QObject):
+    status = Signal(str, str)
+    finished = Signal(str, bool, str)
+    busy_changed = Signal(bool)
+    enabled = True
+
+    def __init__(self):
+        super().__init__()
+        self.requests = []
+
+    def has_link(self, key):
+        return any(item[1] == key for item in self.requests)
+
+    def enqueue(self, process, key, slot):
+        self.requests.append((process.pid, key, slot))
+        self.busy_changed.emit(True)
+
+    def cancel_all(self, *args):
+        self.requests.clear()
+        self.busy_changed.emit(False)
+
+    def cancel_link(self, key):
+        self.requests = [item for item in self.requests if item[1] != key]
 
 
 def test_create_links_and_tasks_with_dialogs_then_select_independently(qt_app, tmp_path):
@@ -324,4 +349,29 @@ def test_cancel_deletion_preserves_links_and_confirm_only_removes_selected(qt_ap
     monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.Yes)
     window.delete_link()
     assert [link.id for link in Manager(manager.store).state.links] == [second]
+    window.close()
+
+
+def test_character_combo_uses_explicit_save_and_login_uses_saved_slot(qt_app, tmp_path, monkeypatch):
+    manager = Manager(JsonStore(tmp_path / "settings.json"))
+    key = manager.save_link("Chính", "https://example.com/game.swf", character_slot=3)
+    spy = LoginSpy()
+    window = MainWindow(manager, login_controller=spy)
+    window.show()
+    qt_app.processEvents()
+    assert window.editor_slot.currentData() == 3
+    window.editor_slot.setCurrentIndex(1)
+    assert window.editor_slot.currentData() == 2 and manager.get_link(key).character_slot == 3
+    process = Mock(pid=101)
+    process.poll.return_value = None
+    monkeypatch.setattr("vptauto.ui.launcher.open_game", Mock(return_value=process))
+    window.open_selected()
+    assert spy.requests == [(101, key, 3)]
+    spy.cancel_all()
+    window.edit_link()
+    assert Manager(manager.store).get_link(key).character_slot == 2
+    window.run_auto()
+    assert spy.requests == [(101, key, 2)]
+    window.stop_login_button.click()
+    assert spy.requests == []
     window.close()

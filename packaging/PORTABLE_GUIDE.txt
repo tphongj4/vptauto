@@ -7,7 +7,14 @@ Yêu cầu: Windows 10/11 x64. Không cần cài Python.
    Không chạy trực tiếp từ bên trong tệp ZIP và không tách VPTAuto.exe
    khỏi hai thư mục app và runtime đi kèm.
 3. Vào Cài đặt, chọn tệp flashplayer25sa.exe đang có trên máy.
-4. Tạo và lưu link. Đăng nhập hoặc Chạy auto đều mở Flash với link đã lưu.
+4. Tạo và lưu link, chọn Nhân vật 1 / 2 / 3 (trái / giữa / phải).
+   Nếu đổi link hoặc nhân vật, bấm Sửa để lưu trước khi chạy.
+5. Đăng nhập hoặc Chạy auto đều mở Flash với link và nhân vật đã lưu:
+   Bắt buộc -> kênh ngẫu nhiên 1-8 -> nhân vật đã chọn -> Vào game.
+   Kênh 1-8 gồm cả hàng bang hội và đấu giá như ảnh mẫu.
+6. Giữ cửa sổ Flash ở phía trước, không che các nút. Khi chuyển cửa sổ khác,
+   thao tác tự động tạm dừng. Nhấn F8 hoặc Dừng đăng nhập trong ứng dụng để
+   hủy thao tác; cửa sổ game vẫn mở. Các link chờ được xử lý lần lượt.
 
 DÙNG DỮ LIỆU THỬ RIÊNG
 
@@ -22,6 +29,9 @@ Chế độ này dùng chung cấu hình với bản cài đặt trên cùng tà
 Muốn ngừng dùng bản portable: đóng ứng dụng rồi xóa thư mục đã giải nén.
 Xóa thư mục đó không xóa cấu hình mặc định nằm trong LocalAppData.
 
-Flash Player và game không nằm trong ZIP. Bộ thực thi nhiệm vụ auto chưa
-được tích hợp. Gói được tạo/kiểm tra tệp trên Linux, chưa chạy thử runtime
-Windows. Xem README.md để biết chi tiết và cách chạy từ mã nguồn.
+Flash Player và game không nằm trong ZIP. Tự đăng nhập nhận diện bố cục
+ba màn hình mẫu, chưa tự nhập tài khoản/mật khẩu hoặc thực hiện nhiệm vụ.
+Nếu không nhận diện được màn hình hoặc chờ quá lâu, ứng dụng dừng và báo
+trạng thái. Nếu Flash dùng lại một cửa sổ cũ, hãy đóng cửa sổ đó rồi thử lại.
+Kiểm tra Windows dùng giao diện game mô phỏng; cần thử thêm với game thật.
+Xem README.md và kết quả GitHub Actions đi kèm phiên bản.
