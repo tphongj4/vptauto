@@ -31,6 +31,14 @@ def test_blank_screen_never_produces_click_targets():
     assert observe(image).kind == "unknown"
 
 
+@pytest.mark.parametrize("kind", ["login", "channels"])
+@pytest.mark.parametrize("scale", [.65, 1, 1.5])
+def test_gradient_buttons_with_thin_cyan_strips_are_recognized(qt_app, kind, scale):
+    frame = scene(kind, scale=scale, gradient=True)
+    result = observe(frame)
+    assert result.kind == kind
+
+
 @pytest.mark.parametrize("slot", [1, 2, 3])
 @pytest.mark.parametrize("channel", [1, 8])
 def test_login_sequence_selects_saved_character_and_channel_boundaries(qt_app, slot, channel):

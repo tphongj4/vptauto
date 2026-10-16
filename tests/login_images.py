@@ -1,6 +1,6 @@
 """Controlled login-layout fixtures, based on the positions in the supplied UI."""
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPen
+from PySide6.QtGui import QColor, QImage, QLinearGradient, QPainter, QPen
 
 
 def rectangles(kind):
@@ -11,7 +11,7 @@ def rectangles(kind):
     return [(410 + 174 * i, 548, 164, 76) for i in range(3)] + [(442, 674, 102, 28), (818, 674, 70, 28)]
 
 
-def scene(kind, scale=1.0, offset=(0, 0), background=True):
+def scene(kind, scale=1.0, offset=(0, 0), background=True, gradient=False):
     width, height = round(1310 * scale + offset[0] * 2), round(850 * scale + offset[1] * 2)
     image = QImage(width, height, QImage.Format.Format_RGB32)
     image.fill(QColor("#101010"))
@@ -29,7 +29,13 @@ def scene(kind, scale=1.0, offset=(0, 0), background=True):
 
     def control(rect, text, color="#00cbd7"):
         painter.setPen(QPen(QColor("#06515c"), 3))
-        painter.setBrush(QColor(color))
+        if gradient and color == "#00cbd7":
+            fill = QLinearGradient(rect[0], rect[1], rect[0], rect[1] + rect[3])
+            for stop, shade in ((0, "#28475b"), (.5, "#46697c"), (.7, "#00e8ce"), (.85, "#00d8c2"), (1, "#075b68")):
+                fill.setColorAt(stop, QColor(shade))
+            painter.setBrush(fill)
+        else:
+            painter.setBrush(QColor(color))
         painter.drawRoundedRect(QRectF(*rect), 4, 4)
         painter.setPen(QColor("#ffeb61"))
         painter.drawText(QRectF(*rect), Qt.AlignmentFlag.AlignCenter, text)

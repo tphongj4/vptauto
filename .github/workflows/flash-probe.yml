@@ -1,0 +1,28 @@
+name: Investigate native Flash background input
+on:
+  push:
+    branches: [fix/flash-background-login]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - name: Compare real Flash message delivery behind another window
+        timeout-minutes: 2
+        run: python scripts/probe_flash_windows.py --output build/flash-probe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Flash-input-probe
+          path: |
+            build/flash-probe/*.json
+            build/flash-probe/*.png
+          if-no-files-found: warn

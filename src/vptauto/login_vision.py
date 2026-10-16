@@ -99,8 +99,10 @@ def cyan_boxes(image: QImage) -> list[Box]:
 
 
 def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
-    buttons = [b for b in boxes if 6 <= b.h <= height * .075 and
-               width * .035 <= b.w <= width * .4 and 2 <= b.w / b.h <= 13]
+    # A gradient may leave only a thin bright strip in the cyan mask. Its
+    # height is not the button height; compare widths and spacing instead.
+    buttons = [b for b in boxes if 2 <= b.h <= height * .075 and
+               width * .035 <= b.w <= width * .4 and 2 <= b.w / b.h <= 60]
     # The eight-row channel dialog has six cyan regular rows; orange/green
     # special rows are inferred only after the aligned stack is established.
     for seed in buttons:
@@ -110,8 +112,10 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
         if len(group) < 5:
             continue
         gaps = [b.center[1] - a.center[1] for a, b in zip(group, group[1:])]
-        spacing = median(gaps)
-        if not 1.2 <= spacing / median(b.h for b in group) <= 2.8:
+        # Text can split a thin strip and remove one row from the mask. The
+        # lower half of gaps estimates adjacent rows rather than a two-row gap.
+        spacing = median(sorted(gaps)[:max(1, (len(gaps) + 1) // 2)])
+        if not .12 <= spacing / median(b.w for b in group) <= .32:
             continue
         top, center = group[0].center[1], round(median(b.center[0] for b in group))
         rows = {round((b.center[1] - top) / spacing) for b in group
@@ -163,7 +167,7 @@ def classify_boxes(boxes: list[Box], width: int, height: int) -> Observation:
             continue
         for big in buttons:
             if (1.2 <= big.w / small.w <= 2.1 and abs(big.center[0] - small.center[0]) < small.w * .12
-                    and 1.5 <= (small.center[1] - big.center[1]) / small.h <= 4):
+                    and .35 <= (small.center[1] - big.center[1]) / small.w <= .85):
                 return Observation("login", force=small.center)
     return Observation()
 
